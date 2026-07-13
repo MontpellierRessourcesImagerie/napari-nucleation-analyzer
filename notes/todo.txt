@@ -1,0 +1,7 @@
+
+- Avoir un format de données qu'on peut ré-ouvrir dans Napari pour contrôler ce qu'il s'est passé.
+- Ajouter des milestones pour pouvoir restorer l'état ou reset en relançant une étape.
+- Exposer le facteur de stddev à dépasser pour trouver un spot.
+- Exposer plus d'options de preprocessing pour trouver les centrosomes.
+- Pouvoir ajuster le nombre de samples pour chaque point de l'arc.
+- Avoir une méthode auto de calcul du nombre de samples requis pour construire un arc.

@@ -1,0 +1,15 @@
+name: napari-nucleation-analyzer
+display_name: Nucleation analyzer
+# use 'hidden' to remove plugin from napari hub search results
+visibility: public
+# see https://napari.org/stable/plugins/technical_references/manifest.html#fields for valid categories
+# categories: []
+contributions:
+  commands:
+    - id: napari-nucleation-analyzer.nucleation_widget
+      python_name: napari_nucleation_analyzer.widget:CentrosomesWidget
+      title: Nucleation analyzer
+  widgets:
+    - command: napari-nucleation-analyzer.nucleation_widget
+      display_name: Nucleation analyzer
+  
