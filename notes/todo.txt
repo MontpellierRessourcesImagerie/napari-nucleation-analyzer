@@ -1,4 +1,9 @@
 
+- Adapter les valeurs du `FindCentrosomesOperator` pour travailler en micromètres plutôt qu'en pixels.
+- Vu que beaucoup de tâches sont maintenant sans temps, on peut paralléliser.
+
+==========================================================================================
+
 - Avoir un format de données qu'on peut ré-ouvrir dans Napari pour contrôler ce qu'il s'est passé.
 - Ajouter des milestones pour pouvoir restorer l'état ou reset en relançant une étape.
 - Exposer le facteur de stddev à dépasser pour trouver un spot.

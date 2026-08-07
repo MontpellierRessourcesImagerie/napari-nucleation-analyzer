@@ -9,7 +9,12 @@ contributions:
     - id: napari-nucleation-analyzer.nucleation_widget
       python_name: napari_nucleation_analyzer.widget:CentrosomesWidget
       title: Nucleation analyzer
+    - id: napari-nucleation-analyzer.ex_nucleation_widget
+      python_name: napari_nucleation_analyzer.exp_widget:NucleationWidget
+      title: Nucleation exp analyzer
   widgets:
     - command: napari-nucleation-analyzer.nucleation_widget
       display_name: Nucleation analyzer
+    - command: napari-nucleation-analyzer.ex_nucleation_widget
+      display_name: Nucleation exp analyzer
   
