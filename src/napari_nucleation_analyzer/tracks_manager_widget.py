@@ -41,6 +41,7 @@ class TracksManagerWidget(QWidget):
     INDEX_PADDING = 2
     ACTION_BUTTON_WIDTH = 110
     DELETE_BUTTON_WIDTH = 28
+    PREFIX = "_Centrosome "
 
     PALETTE = [
         "#1f77b4",  # muted blue
@@ -55,9 +56,10 @@ class TracksManagerWidget(QWidget):
         "#17becf",  # blue-teal
     ]
 
-    def __init__(self, viewer) -> None:
+    def __init__(self, viewer, parent) -> None:
         super().__init__()
         self.viewer = viewer
+        self.parent = parent
         self._next_index: int = 1
         self._rows: dict[int, _TrackRow] = {}
         self.create_ui()
@@ -70,7 +72,7 @@ class TracksManagerWidget(QWidget):
         self._rows_layout.setSpacing(2)
         self._main_layout.addWidget(self._rows_container)
 
-        self._add_button = QPushButton("Add track", self)
+        self._add_button = QPushButton("Add centrosome", self)
         self._add_button.clicked.connect(self._on_add_track_clicked)
         self._main_layout.addWidget(self._add_button)
 
@@ -80,7 +82,7 @@ class TracksManagerWidget(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def add_track(self) -> int:
+    def add_track(self, line=None) -> int:
         """Add a new track row. Returns the index assigned to the new track."""
         index = self._next_index
         self._next_index += 1
@@ -88,6 +90,8 @@ class TracksManagerWidget(QWidget):
         row = self._build_row(index)
         self._rows[index] = row
         self._rows_layout.addWidget(row.container)
+
+        self._add_track_layer(index, line)
 
         return index
 
@@ -127,6 +131,44 @@ class TracksManagerWidget(QWidget):
         self._freeze_line_on_layer(index, start_frame)
         return (row.frame_start, row.frame_end)
 
+    def as_track_layer_name(self, index: int) -> str:
+        """Return the name of the track layer corresponding to `index`."""
+        index = int(index)
+        return f"{self.PREFIX}{index:0{self.INDEX_PADDING}d}"
+
+    def as_hints(self) -> dict:
+        """Convert tracks to hint format.
+        
+        Returns a dictionary where keys are track indices and values are dicts with:
+        - 'start': starting frame
+        - 'end': ending frame
+        - 'points': numpy array of points (spatial coordinates)
+        - 'color': color string
+        """
+        hints = {}
+        for index, row in self._rows.items():
+            # Get points from the layer if it exists
+            layer_name = self.as_track_layer_name(index)
+            points = np.array([])
+            if layer_name in self.viewer.layers:
+                layer = self.viewer.layers[layer_name]
+                if len(layer.data) > 0:
+                    line = layer.data[0]
+                    # Extract spatial coordinates (skip the time dimension)
+                    if line.shape[1] >= 3:
+                        points = line[:, 1:]  # Remove time dimension
+                    else:
+                        points = line
+            
+            hints[index] = {
+                'start': row.frame_start,
+                'end': row.frame_end,
+                'points': points,
+                'color': row.color,
+            }
+        
+        return hints
+
     # ------------------------------------------------------------------
     # Row construction
     # ------------------------------------------------------------------
@@ -154,14 +196,14 @@ class TracksManagerWidget(QWidget):
 
         label = QLabel(self._format_label(index), container)
 
-        start_button = QPushButton("Start track", container)
-        end_button = QPushButton("End track", container)
+        start_button = QPushButton("Start", container)
+        end_button = QPushButton("End", container)
         self._lock_width(start_button, self.ACTION_BUTTON_WIDTH)
         self._lock_width(end_button, self.ACTION_BUTTON_WIDTH)
 
         delete_button = QPushButton(container)
         delete_button.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
-        delete_button.setToolTip("Delete track")
+        delete_button.setToolTip("Delete")
         self._lock_width(delete_button, self.DELETE_BUTTON_WIDTH)
 
         layout.addWidget(color_dot)
@@ -185,17 +227,19 @@ class TracksManagerWidget(QWidget):
         )
 
     def _format_label(self, index: int) -> str:
-        return f"Track {index:0{self.INDEX_PADDING}d}:"
+        return f"Centrosome {index:0{self.INDEX_PADDING}d}:"
 
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
 
-    def _add_track_layer(self, track_id):
-        layer_name = f"_Track {track_id:0{self.INDEX_PADDING}d}"
+    def _add_track_layer(self, track_id, line=None):
+        layer_name = f"{self.PREFIX}{track_id:0{self.INDEX_PADDING}d}"
         if layer_name in self.viewer.layers:
             return
+        a, s, u = self.parent.get_image_calibration()
         self.viewer.add_shapes(
+            [] if line is None else [line],
             name=layer_name, 
             shape_type="line", 
             edge_color=self._next_color(), 
@@ -204,19 +248,21 @@ class TracksManagerWidget(QWidget):
             opacity=0.75, 
             visible=True,
             ndim=3,
+            axis_labels=a,
+            scale=s,
+            units=u
         )
 
     def _remove_track_layer(self, track_id):
-        layer_name = f"_Track {track_id:0{self.INDEX_PADDING}d}"
+        layer_name = f"{self.PREFIX}{track_id:0{self.INDEX_PADDING}d}"
         if layer_name in self.viewer.layers:
             self.viewer.layers.remove(self.viewer.layers[layer_name])
 
     def _on_add_track_clicked(self) -> None:
-        track_id = self.add_track()
-        self._add_track_layer(track_id)
+        self.add_track()
 
     def _freeze_line_on_layer(self, index, start_t):
-        layer_name = f"_Track {index:0{self.INDEX_PADDING}d}"
+        layer_name = f"{self.PREFIX}{index:0{self.INDEX_PADDING}d}"
         if layer_name not in self.viewer.layers:
             return
         layer = self.viewer.layers[layer_name]

@@ -1,12 +1,6 @@
 # Notes
 
-- Pour essayer de se débarasser du bruit, on commence par faire un filtre médian. 
-  Dans la mesure où on est en 2D avec des objets qui sont censés peu bouger, utilisation
-  d'un median 3D pour aggreger de l'info des frames d'avant et après.
-
-| N Frames | Temps |
-| -------- | ----- |
-| 1        | 13.1  |
-| 3        | 31.5  |
-| 5        | 47.6  |
-
+- Le fait de traiter la série de temps comme un stack 3D n'est pas une bonne idée.
+  Cela détruit de l'information utile quand l'objet disparait sur la frame suivante et quand
+  l'objet ne fait que bouger, on observe la formation de deux spots sur les frames où il a 
+  été propagé.

@@ -1,6 +1,8 @@
 
-- Adapter les valeurs du `FindCentrosomesOperator` pour travailler en micromètres plutôt qu'en pixels.
-- Vu que beaucoup de tâches sont maintenant sans temps, on peut paralléliser.
+- Filtrer les tracks vides lors du lancement.
+- Dans _make_kymograph, s'assurer que les centrioles et les arcs sont dans le même ordre.
+- Vérifier le sens des kymographes, si le temps est inversé, c'est problématique.
+  On peut utiliser une fausse image d'intensité avec chaque point de temps qui a une valeur unique.
 
 ==========================================================================================
 
@@ -10,3 +12,13 @@
 - Exposer plus d'options de preprocessing pour trouver les centrosomes.
 - Pouvoir ajuster le nombre de samples pour chaque point de l'arc.
 - Avoir une méthode auto de calcul du nombre de samples requis pour construire un arc.
+
+==========================================================================================
+
+Créations d'une track de centrosome:
+
+- Faire un "Add centrosome" ou se placer sur la première frame (de façon indifférenciée).
+- Faire une ligne pour indiquer où se trouvent les centrioles du centrosome.
+- Appuyer sur "Start". Il ne faut pas pouvoir set la fin si le début n'est pas set.
+- Il ne faut pas pouvoir set les bornes s'il n'y a pas exactement une ligne.
+- Lors du lancement, il faut ignorer les tracks avec un nombre de lignes différent de 1.

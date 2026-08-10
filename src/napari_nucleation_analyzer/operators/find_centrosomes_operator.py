@@ -9,57 +9,36 @@ from scipy.ndimage import grey_opening, gaussian_laplace, median_filter
 
 class FindCentrosomesOperator:
     def __init__(self):
-        tp.quiet(True)
         self.input_image = None
         self.hints = {}
+        self.prominence = self.default_prominence()
+        self.searching_range = self.default_searching_range()
+        self.memory = self.default_memory()
+        self.max_binding_distance = self.default_max_binding_distance()
+
         self.centrosomes = pd.DataFrame(
             columns=["centriole_id", "T", "Y", "X", "centrosome_id"]
         )
-        self.prominence = FindCentrosomesOperator.default_prominence()
-        self.searching_range = FindCentrosomesOperator.default_searching_range()
-        self.memory = FindCentrosomesOperator.default_memory()
-        self.max_binding_distance = (
-            FindCentrosomesOperator.default_max_binding_distance()
-        )
+
+        tp.quiet(True)
 
     @staticmethod
-    def default_prominence():
+    def default_prominence() -> float:
         return 0.15
 
     @staticmethod
-    def default_searching_range():
+    def default_searching_range() -> float:
         return 3.25
 
-    def get_searching_range_pxl(self):
-        if self.input_image is None:
-            raise ValueError(
-                "Input image must be set before computing searching range in pixels."
-            )
-        return self.searching_range / self.input_image.attrs["scale"]["X"]
-
     @staticmethod
-    def default_memory():
+    def default_memory() -> int:
         return 10
 
-    def get_memory_frames(self):
-        if self.input_image is None:
-            raise ValueError(
-                "Input image must be set before computing memory in frames."
-            )
-        return int(self.memory / self.input_image.attrs["scale"]["T"])
-
     @staticmethod
-    def default_max_binding_distance():
+    def default_max_binding_distance() -> float:
         return 0.6
 
-    def get_max_binding_distance_pxl(self):
-        if self.input_image is None:
-            raise ValueError(
-                "Input image must be set before computing max binding distance in pixels."
-            )
-        return self.max_binding_distance / self.input_image.attrs["scale"]["X"]
-
-    def set_input_image(self, image_arr, calibration, units):
+    def set_input_image(self, image_arr: np.ndarray, calibration: dict, units: dict):
         if image_arr.ndim != 3:
             raise ValueError("Input image must be a 3D array (T, Y, X).")
         self.input_image = xr.DataArray(
@@ -68,7 +47,7 @@ class FindCentrosomesOperator:
             attrs={"scale": calibration, "units": units},
         )
 
-    def set_hints(self, hints):
+    def set_hints(self, hints: dict):
         if self.input_image is None:
             raise ValueError("Input image must be set before setting hint points.")
         for centrosome_id, points_info in hints.items():
@@ -100,17 +79,81 @@ class FindCentrosomesOperator:
                 )
         self.hints = hints
 
-    def get_centrosomes(self):
+    def set_prominence(self, prominence: float):
+        if prominence <= 0 or prominence >= 1:
+            raise ValueError("Prominence must be a value between 0 and 1.")
+        self.prominence = prominence
+
+    def set_searching_range(self, searching_range: float):
+        if searching_range <= 0:
+            raise ValueError("Searching range must be a positive value.")
+        self.searching_range = searching_range
+
+    def set_memory(self, memory: float | int):
+        if memory < 0:
+            raise ValueError("Memory must be a non-negative value.")
+        self.memory = memory
+
+    def set_max_binding_distance(self, max_binding_distance: float):
+        if max_binding_distance <= 0:
+            raise ValueError("Max binding distance must be a positive value.")
+        self.max_binding_distance = max_binding_distance
+
+    def get_input_image(self) -> xr.DataArray:
+        if self.input_image is None:
+            raise ValueError("Input image has not been set.")
+        return self.input_image
+
+    def get_hints(self) -> dict:
+        if not self.hints:
+            raise ValueError("Hint points have not been set.")
+        return self.hints
+
+    def get_prominence(self) -> float:
+        return self.prominence
+
+    def get_searching_range(self) -> float:
+        return self.searching_range
+
+    def get_searching_range_pxl(self) -> int:
+        if self.input_image is None:
+            raise ValueError(
+                "Input image must be set before computing searching range in pixels."
+            )
+        return int(np.ceil(self.searching_range / self.input_image.attrs["scale"]["X"]))
+
+    def get_memory(self) -> float | int:
+        return self.memory
+
+    def get_memory_frames(self) -> int:
+        if self.input_image is None:
+            raise ValueError(
+                "Input image must be set before computing memory in frames."
+            )
+        return int(self.memory / self.input_image.attrs["scale"]["T"])
+
+    def get_max_binding_distance(self) -> float:
+        return self.max_binding_distance
+
+    def get_max_binding_distance_pxl(self) -> int:
+        if self.input_image is None:
+            raise ValueError(
+                "Input image must be set before computing max binding distance in pixels."
+            )
+        return int(
+            np.ceil(self.max_binding_distance / self.input_image.attrs["scale"]["X"])
+        )
+
+    def get_centrosomes(self) -> pd.DataFrame:
         if self.centrosomes is None:
             raise ValueError(
                 "Centrosomes have not been computed yet. Run the operator first."
             )
         return self.centrosomes
 
-    def _tracking_pre_processing(self):
-        if self.input_image is None:
-            raise ValueError("Input image must be set before running the operator.")
-        raw_image = self.input_image.transpose("T", "Y", "X").values.astype(np.float32)
+    def _tracking_pre_processing(self) -> np.ndarray:
+        img = self.get_input_image()
+        raw_image = img.transpose("T", "Y", "X").values.astype(np.float32)
         log_res = np.zeros_like(raw_image)
         print("Running preprocessing...")
 
@@ -129,7 +172,7 @@ class FindCentrosomesOperator:
         log_res = log_res * -1.0 + 1.0
         return log_res
 
-    def _find_maximas(self, log_res):
+    def _find_maximas(self, log_res) -> pd.DataFrame:
         print("Searching for local maxima...")
 
         def _process_frame(t):
@@ -143,7 +186,7 @@ class FindCentrosomesOperator:
         df_buffer = [item for sublist in results for item in sublist]
         return pd.DataFrame(df_buffer)
 
-    def _track_spots(self, spots_df):
+    def _track_spots(self, spots_df) -> pd.DataFrame:
         search_range = self.get_searching_range_pxl()
         memory = self.get_memory_frames()
         predictor = tp.predict.NearestVelocityPredict()
@@ -159,7 +202,7 @@ class FindCentrosomesOperator:
         spots_df["centriole_id"] = linked["particle"].astype(int) + 1
         return spots_df
 
-    def _bind_tracks_to_hints(self, tracked):
+    def _bind_tracks_to_hints(self, tracked) -> dict:
         bindings = {}
         binding_dist = self.get_max_binding_distance_pxl()
         for centrosome_id, hint_info in self.hints.items():
@@ -179,7 +222,7 @@ class FindCentrosomesOperator:
                     bindings[centrosome_id][i] = best_candidate["centriole_id"]
         return bindings
 
-    def _filter_by_hint_points(self, tracked):
+    def _filter_by_hint_points(self, tracked) -> pd.DataFrame:
         bindings = self._bind_tracks_to_hints(tracked)
         tracked = tracked.copy()
         tracked["centrosome_id"] = 0
@@ -202,7 +245,7 @@ class FindCentrosomesOperator:
         tracked = tracked[tracked["centrosome_id"] != 0]
         return tracked
 
-    def _interpolate_missing_time_points(self, tracked):
+    def _interpolate_missing_time_points(self, tracked) -> pd.DataFrame:
         """
         All the tracks must be complete in terms of locations.
         This function filss the gap by creating new rows for missing time points.
@@ -245,6 +288,27 @@ class FindCentrosomesOperator:
         self.centrosomes = tracked.sort_values(
             by=["centrosome_id", "centriole_id", "T"]
         ).reset_index(drop=True)
+
+    @staticmethod
+    def as_lines(centrosomes_df: pd.DataFrame, track_colors: dict) -> tuple[list, list, list]:
+        lines = []
+        colors = []
+        centrosome_ids = []
+        for centrosome_id, group in centrosomes_df.groupby("centrosome_id"):
+            centriole_ids = group["centriole_id"].unique()
+            components = []
+            for centriole_id in centriole_ids:
+                centriole_points = group[group["centriole_id"] == centriole_id][
+                    ["T", "Y", "X"]
+                ]
+                centriole_points = centriole_points.sort_values(by="T")
+                centriole_points = centriole_points.values
+                components.append(centriole_points)
+            points = np.stack(components, axis=1)
+            lines.append([p for p in points])
+            colors.append([track_colors.get(centrosome_id, "#ffffff") for _ in range(len(points))])
+            centrosome_ids.append(centrosome_id)
+        return centrosome_ids, lines, colors
 
 
 def launch_full_process():
@@ -294,5 +358,51 @@ def launch_full_process():
     napari.run()
 
 
+def test_as_napari_lines():
+    from pathlib import Path
+    import tifffile as tiff
+    import napari
+    import pandas as pd
+
+    DUMP = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump")
+    
+    folder_in = Path("/home/clement/Documents/projects/nucleation/3VPCs")
+    filename = "251119_#4_30_001_016.vsi - C561.tif"
+    path_in = folder_in / filename
+
+    calib = {"T": 1, "Y": 0.1083333, "X": 0.1083333}
+    units = {"T": "s", "Y": "um", "X": "um"}
+
+    img = tiff.imread(path_in)  # (T, Y, X)
+    
+    centrosomes_path = DUMP / "centrosome_points_track.csv"
+    centrosomes_df = pd.read_csv(centrosomes_path)
+
+    track_colors = {1: "#ff0000", 2: "#00ff00"}
+    centrosome_ids, lines, colors = FindCentrosomesOperator.as_lines(centrosomes_df, track_colors)
+
+    viewer = napari.Viewer()
+
+    viewer.add_image(img, name="raw")
+
+    viewer.add_tracks(
+        centrosomes_df[["centriole_id", "T", "Y", "X"]].values,
+        name="tracks",
+        features=centrosomes_df,
+    )
+
+    for c_id, line, color in zip(centrosome_ids, lines, colors):
+        viewer.add_shapes(
+            line,
+            shape_type="line",
+            edge_color=color,
+            name=f"centrosome_line_{c_id}",
+            opacity=0.75,
+            ndim=3
+        )
+    napari.run()
+
+
 if __name__ == "__main__":
-    launch_full_process()
+    # launch_full_process()
+    test_as_napari_lines()

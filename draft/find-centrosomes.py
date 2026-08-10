@@ -245,7 +245,8 @@ def launch_full_process():
             'points': np.array([
                 [347, 90],
                 [337, 132]
-            ])
+            ]),
+            'color': "#1f77b4"
         },
         2: {
             'start': 17,
@@ -253,7 +254,8 @@ def launch_full_process():
             'points': np.array([
                 [248, 477],
                 [237, 514]
-            ])
+            ]),
+            'color': "#ff7f0e"
         }
     }
 
