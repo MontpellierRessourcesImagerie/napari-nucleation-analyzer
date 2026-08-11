@@ -27,16 +27,14 @@ class ImportArchiveOperator:
         self.arcs = None
         self.kymographs = None
         self.spots = None
+        self.kymos_order = []
+        self.triplets = []
 
     def _get_widget(self):
         if self.widget is not None:
             return self.widget
         from napari_nucleation_analyzer.widget import CentrosomesWidget
         for widget in self.viewer.window.dock_widgets.values():
-            print("=========")
-            print(type(widget))
-            print(widget)
-            print(CentrosomesWidget)
             if type(widget) == CentrosomesWidget:
                 return widget
         raise ValueError("CentrosomesWidget not found in the viewer.")
@@ -130,22 +128,45 @@ class ImportArchiveOperator:
         if 'spots-prominence' in self.settings:
             widget.spot_prominence_input.setValue(self.settings['spots-prominence'])
 
+    # def _inject_tracked_centrosomes(self, widget):
+    #     result = self.tracked_centrosomes
+    #     centrosomes_tracks_layer_name = widget.centrioles_tracks_prefix + self.settings["image-name"]
+    #     image_layer = self.viewer.layers[self.settings["image-name"]]
+
+    #     self.viewer.add_tracks(
+    #         result[['centriole_id', 'T', 'Y', 'X']],
+    #         name=centrosomes_tracks_layer_name,
+    #         scale=image_layer.scale,
+    #         features=result,
+    #         graph=None,
+    #         tail_length=8,
+    #         hide_completed_tracks=True,
+    #         tail_width=3,
+    #         units=image_layer.units
+    #     )
+
     def _inject_tracked_centrosomes(self, widget):
         result = self.tracked_centrosomes
         centrosomes_tracks_layer_name = widget.centrioles_tracks_prefix + self.settings["image-name"]
         image_layer = self.viewer.layers[self.settings["image-name"]]
 
-        self.viewer.add_tracks(
+        if result is None or result.empty:
+            raise ValueError("Tracked centrosomes data is empty. Please ensure that tracked centrosomes are set before injecting.")
+
+        self.triplets.append((
             result[['centriole_id', 'T', 'Y', 'X']],
-            name=centrosomes_tracks_layer_name,
-            scale=image_layer.scale,
-            features=result,
-            graph=None,
-            tail_length=8,
-            hide_completed_tracks=True,
-            tail_width=3,
-            units=image_layer.units
-        )
+            {
+                'name': centrosomes_tracks_layer_name,
+                'scale': image_layer.scale,
+                'features': result,
+                'graph': None,
+                'tail_length': 8,
+                'hide_completed_tracks': True,
+                'tail_width': 3,
+                'units': image_layer.units
+            },
+            'tracks'
+        ))
 
     def _rebuild_pairs(self):
         if self.tracked_centrosomes is None:
@@ -161,6 +182,26 @@ class ImportArchiveOperator:
             pairs[centriole_id] = centrosomes[0]
         return pairs
 
+    # def _inject_arcs(self, widget):
+    #     if self.arcs is None:
+    #         raise ValueError("Arcs not set. Please set arcs before injecting.")
+    #     image_layer = self.viewer.layers[self.settings["image-name"]]
+
+    #     for centriole_id, arc in self.arcs.items():
+    #         centrosome_id = int(self.pairs[centriole_id])
+    #         color = widget.tracks_manager_widget._rows[centrosome_id].color
+    #         self.viewer.add_shapes(
+    #             arc,
+    #             shape_type='path',
+    #             edge_color=color,
+    #             edge_width=2,
+    #             face_color='transparent',
+    #             opacity=0.75,
+    #             name=f"{widget.arcs_shapes_prefix}{centriole_id}",
+    #             scale=image_layer.scale,
+    #             units=image_layer.units
+    #         )
+
     def _inject_arcs(self, widget):
         if self.arcs is None:
             raise ValueError("Arcs not set. Please set arcs before injecting.")
@@ -169,17 +210,88 @@ class ImportArchiveOperator:
         for centriole_id, arc in self.arcs.items():
             centrosome_id = int(self.pairs[centriole_id])
             color = widget.tracks_manager_widget._rows[centrosome_id].color
-            self.viewer.add_shapes(
+            self.triplets.append((
                 arc,
-                shape_type='path',
-                edge_color=color,
-                edge_width=2,
-                face_color='transparent',
-                opacity=0.75,
-                name=f"{widget.arcs_shapes_prefix}{centriole_id}",
-                scale=image_layer.scale,
-                units=image_layer.units
-            )
+                {
+                    'shape_type': 'path',
+                    'edge_color': color,
+                    'edge_width': 2,
+                    'face_color': 'transparent',
+                    'opacity': 0.75,
+                    'name': f"{widget.arcs_shapes_prefix}{centriole_id}",
+                    'scale': image_layer.scale,
+                    'units': image_layer.units
+                },
+                'shapes'
+            ))
+
+    # def _inject_kymographs(self, widget):
+    #     if self.kymographs is None:
+    #         raise ValueError("Kymographs not set. Please set kymographs before injecting.")
+
+    #     centriole_ids = [(k, v) for k, v in self.pairs.items()]
+    #     centriole_ids.sort(key=lambda x: x[1]) # sorted by centrosome_id
+    #     centrosome_ids = [int(v) for _, v in centriole_ids]
+    #     centriole_ids = [int(k) for k, _ in centriole_ids]
+
+    #     kymographs = self.kymographs
+    #     padding = 10
+
+    #     # Hide all the layers except the original image
+    #     for layer in self.viewer.layers:
+    #         layer.visible = False
+
+    #     # create a list of polygons
+    #     polygons = []
+    #     for i, centriole_id in enumerate(centriole_ids):
+    #         kymograph = kymographs[centriole_id]
+    #         T, Y = kymograph.shape
+    #         polygon = np.array([
+    #             [0, i * (Y + padding)],
+    #             [T - 1, i * (Y + padding)],
+    #             [T - 1, i * (Y + padding) + Y - 1],
+    #             [0, i * (Y + padding) + Y - 1],
+    #         ])
+    #         polygons.append(polygon)
+
+    #     # create features
+    #     features = {
+    #         'centriole_id': centriole_ids,
+    #         'centrosome_id': centrosome_ids
+    #     }
+
+    #     text = {
+    #         'string': 'C{centrosome_id} -> c{centriole_id}',
+    #         'anchor': 'upper_left',
+    #         'translation': [-5, 0],
+    #         'size': 16,
+    #         'color': 'white',
+    #     }
+
+    #     colors = [widget.tracks_manager_widget._rows[int(self.pairs[centriole_id])].color for centriole_id in centriole_ids]
+
+    #     self.viewer.add_shapes(
+    #         polygons,
+    #         features=features,
+    #         shape_type='polygon',
+    #         edge_width=3,
+    #         opacity=1.0,
+    #         edge_color=colors,
+    #         face_color='transparent',
+    #         text=text,
+    #         name='kymo_outlines'
+    #     )
+
+    #     # add the images
+    #     for i, centriole_id in enumerate(centriole_ids):
+    #         kymograph = kymographs[centriole_id]
+    #         self.viewer.add_image(
+    #             kymograph,
+    #             name=f"{widget.kymo_prefix}{centriole_id}",
+    #             scale=(1, 1),
+    #             translate=(0, i * (kymograph.shape[1] + padding)),
+    #             colormap='turbo'
+    #         )
 
     def _inject_kymographs(self, widget):
         if self.kymographs is None:
@@ -189,13 +301,10 @@ class ImportArchiveOperator:
         centriole_ids.sort(key=lambda x: x[1]) # sorted by centrosome_id
         centrosome_ids = [int(v) for _, v in centriole_ids]
         centriole_ids = [int(k) for k, _ in centriole_ids]
+        self.kymos_order = centriole_ids  # Store the order of kymographs for later use
 
         kymographs = self.kymographs
         padding = 10
-
-        # Hide all the layers except the original image
-        for layer in self.viewer.layers:
-            layer.visible = False
 
         # create a list of polygons
         polygons = []
@@ -225,57 +334,62 @@ class ImportArchiveOperator:
         }
 
         colors = [widget.tracks_manager_widget._rows[int(self.pairs[centriole_id])].color for centriole_id in centriole_ids]
-
-        self.viewer.add_shapes(
+        self.triplets.append((
             polygons,
-            features=features,
-            shape_type='polygon',
-            edge_width=3,
-            opacity=1.0,
-            edge_color=colors,
-            face_color='transparent',
-            text=text,
-            name='kymo_outlines'
-        )
+            {
+                'features': features,
+                'shape_type': 'polygon',
+                'edge_width': 3,
+                'opacity': 1.0,
+                'edge_color': colors,
+                'face_color': 'transparent',
+                'text': text,
+                'name': 'kymo_outlines'
+            },
+            'shapes'
+        ))
 
         # add the images
         for i, centriole_id in enumerate(centriole_ids):
             kymograph = kymographs[centriole_id]
-            self.viewer.add_image(
+            self.triplets.append((
                 kymograph,
-                name=f"{widget.kymo_prefix}{centriole_id}",
-                scale=(1, 1),
-                translate=(0, i * (kymograph.shape[1] + padding)),
-                colormap='turbo'
-            )
+                {
+                    'name': f"{widget.kymo_prefix}{centriole_id}",
+                    'scale': (1, 1),
+                    'translate': (0, i * (kymograph.shape[1] + padding)),
+                    'colormap': 'turbo'
+                },
+                'image'
+            ))
 
     def _inject_spots(self, widget):
         if self.spots is None:
             raise ValueError("Spots not set. Please set spots before injecting.")
 
         coordinates = self.spots
-        for centriole_id, coords in coordinates.items():
-            if coords.size == 0:
-                continue
-            
-            kymo_layer_name = f"{widget.kymo_prefix}{centriole_id}"
-            if kymo_layer_name not in self.viewer.layers:
-                continue
-            
-            kymo_layer = self.viewer.layers[kymo_layer_name]
+        if len(self.kymos_order) != len(coordinates):
+            raise ValueError("Mismatch between the number of kymographs and spots. Please ensure that both are set correctly.")
+
+        padding = 10
+        kymographs = self.kymographs
+
+        for i, centriole_id in enumerate(self.kymos_order):
+            coords = coordinates[centriole_id]
             spots_layer_name = f"{widget.spots_layer_prefix}{centriole_id}"
-            if spots_layer_name in self.viewer.layers:
-                layer = self.viewer.layers[spots_layer_name]
-                layer.data = coords
-            else:
-                self.viewer.add_points(
-                    coords,
-                    name=f"{widget.spots_layer_prefix}{centriole_id}",
-                    scale=kymo_layer.scale,
-                    face_color='transparent',
-                    size=5,
-                    translate=kymo_layer.translate
-                )
+            kymograph = kymographs[centriole_id]
+
+            self.triplets.append((
+                coords,
+                {
+                    'name': spots_layer_name,
+                    'scale': (1, 1),
+                    'face_color': 'transparent',
+                    'size': 5,
+                    'translate': (0, i * (kymograph.shape[1] + padding))
+                },
+                'points'
+            ))
 
     def _inject_values(self):
         widget = self._get_widget()

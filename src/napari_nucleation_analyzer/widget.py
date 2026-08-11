@@ -40,16 +40,9 @@ from .export_archive_operator import ExportArchiveOperator
 class CentrosomesWidget(QWidget):
 
     centrioles_tracks_prefix = "_Tracked-centrioles-"
-    centrosomes_lines_prefix = "_Centrosome "
     arcs_shapes_prefix = "_Arc "
     kymo_prefix = "_Kymo "
     spots_layer_prefix = "_Spots "
-
-    colors = [
-        'red', 'lime', 'cyan', 'yellow', 'magenta', 'orange', 'purple', 'brown', 'pink',
-        'green', 'teal', 'navy', 'maroon', 'olive', 'gray', 'black', 'white', 'silver', 
-        'violet', 'turquoise', 'salmon', 'blue', 'gold', 'indigo'
-    ]
 
     def __init__(self, viewer: "napari.viewer.Viewer"): # type: ignore
         super().__init__()
@@ -303,7 +296,7 @@ class CentrosomesWidget(QWidget):
         self.current_operator = op
 
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Building centrosomes..."
             },
@@ -397,7 +390,7 @@ class CentrosomesWidget(QWidget):
         self.current_operator = op
 
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Building arcs..."
             },
@@ -472,7 +465,7 @@ class CentrosomesWidget(QWidget):
         op.set_centrosomes(centrosomes)
 
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Building kymographs..."
             },
@@ -587,7 +580,7 @@ class CentrosomesWidget(QWidget):
         op.set_kymographs(kymographs)
 
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Locating spots in kymographs..."
             },
@@ -667,7 +660,7 @@ class CentrosomesWidget(QWidget):
         op.set_spots(spots)
 
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Exporting summary..."
             },
@@ -715,7 +708,7 @@ class CentrosomesWidget(QWidget):
         
         self.current_operator = op
         worker = create_worker(
-            self.current_operator.run,
+            lambda: self.current_operator.run() if self.current_operator is not None else None,
             _progress={
                 "desc": "Exporting archive..."
             },

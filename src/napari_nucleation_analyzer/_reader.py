@@ -7,6 +7,7 @@ def _reader_function(archive_path):
     op = ImportArchiveOperator(viewer)
     op.set_root_path(archive_path)
     op.run()
+    return op.triplets
 
 def napari_get_reader(path):
     if isinstance(path, list):
