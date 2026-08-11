@@ -173,8 +173,6 @@ class FindCentrosomesOperator:
         return log_res
 
     def _find_maximas(self, log_res) -> pd.DataFrame:
-        print("Searching for local maxima...")
-
         def _process_frame(t):
             coords = h_maxima(log_res[t], h=self.prominence)
             coords = np.argwhere(coords)

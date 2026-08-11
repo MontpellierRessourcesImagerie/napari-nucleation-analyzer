@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
 
 from qtpy.QtGui import QFont
 import napari
+from pathlib import Path
 
 from napari.qt.threading import create_worker
 from napari.utils.notifications import show_info, show_warning
@@ -34,6 +35,7 @@ from .operators import (
     SummaryOperator
 )
 from .tracks_manager_widget import TracksManagerWidget
+from .export_archive_operator import ExportArchiveOperator
 
 class CentrosomesWidget(QWidget):
 
@@ -223,7 +225,8 @@ class CentrosomesWidget(QWidget):
         h_layout = QHBoxLayout()
 
         self.spot_prominence_input = QDoubleSpinBox()
-        self.spot_prominence_input.setRange(0.0, 100.0)
+        self.spot_prominence_input.setRange(0.0, 10.0)
+        self.spot_prominence_input.setSingleStep(0.05)
         self.spot_prominence_input.setValue(FindSpotsOperator.default_std_coeff())
         h_layout.addWidget(QLabel("Spot prominence"))
         h_layout.addWidget(self.spot_prominence_input)
@@ -235,11 +238,21 @@ class CentrosomesWidget(QWidget):
 
         layout.addLayout(h_layout)
 
-        # Export summary
+        # Export
+
+        h_layout = QHBoxLayout()
+
         self.export_summary_button = QPushButton("Export summary")
         self.export_summary_button.setFont(self.custom_font)
         self.export_summary_button.clicked.connect(self.launch_export_summary)
-        layout.addWidget(self.export_summary_button)
+        h_layout.addWidget(self.export_summary_button)
+
+        self.export_archive_button = QPushButton("Export archive")
+        self.export_archive_button.setFont(self.custom_font)
+        self.export_archive_button.clicked.connect(self.launch_export_archive)
+        h_layout.addWidget(self.export_archive_button)
+
+        layout.addLayout(h_layout)
 
         self.kymographs_group.setLayout(layout)
         parent_layout.addWidget(self.kymographs_group)
@@ -247,6 +260,7 @@ class CentrosomesWidget(QWidget):
     # -------- Callbacks: ----------------------------------
 
     def set_enabled(self, enabled: bool):
+        self.tracks_group.setEnabled(enabled)
         self.find_centrosomes_group.setEnabled(enabled)
         self.build_arcs_group.setEnabled(enabled)
         self.kymographs_group.setEnabled(enabled)
@@ -339,7 +353,7 @@ class CentrosomesWidget(QWidget):
         centrosome_ids, lines, colors = FindCentrosomesOperator.as_lines(result, track_colors)
 
         for c_id, line, color in zip(centrosome_ids, lines, colors):
-            layer_name = self.centrosomes_lines_prefix + str(int(c_id))
+            layer_name = self.tracks_manager_widget.as_track_layer_name(c_id)
             if layer_name in self.viewer.layers:
                 layer = self.viewer.layers[layer_name]
                 self.viewer.layers.remove(layer)
@@ -525,6 +539,7 @@ class CentrosomesWidget(QWidget):
 
         self.viewer.add_shapes(
             polygons,
+            opacity=1.0,
             features=features,
             shape_type='polygon',
             edge_width=3,
@@ -544,6 +559,14 @@ class CentrosomesWidget(QWidget):
                 translate=(0, i * (kymograph.shape[1] + padding)),
                 colormap='turbo'
             )
+
+    def _gather_kymographs(self):
+        kymographs = {}
+        for layer in self.viewer.layers:
+            if layer.name.startswith(self.kymo_prefix):
+                centriole_id = int(layer.name.replace(self.kymo_prefix, ""))
+                kymographs[centriole_id] = layer.data
+        return kymographs
 
     def launch_locate_spots(self):
         all_kymos_layer_names = [layer.name for layer in self.viewer.layers if layer.name.startswith(CentrosomesWidget.kymo_prefix)]
@@ -607,6 +630,14 @@ class CentrosomesWidget(QWidget):
                     translate=kymo_layer.translate
                 )
 
+    def _gather_spots(self):
+        spots = {}
+        for layer in self.viewer.layers:
+            if layer.name.startswith(self.spots_layer_prefix):
+                centriole_id = int(layer.name.replace(self.spots_layer_prefix, ""))
+                spots[centriole_id] = layer.data
+        return spots
+
     def launch_export_summary(self):
         all_kymos_layer_names = [layer.name for layer in self.viewer.layers if layer.name.startswith(CentrosomesWidget.kymo_prefix)]
         if not all_kymos_layer_names:
@@ -665,10 +696,49 @@ class CentrosomesWidget(QWidget):
         summary = self.current_operator.get_summary()
         summary.to_csv(csv_path, index=False)
 
+    def launch_export_archive(self):
+        archive_path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Export Directory"
+        )
+
+        if not archive_path:
+            show_info("Export cancelled.")
+            return
+
+        parent_folder = Path(archive_path)
+        img_name_as_folder = self.image_combo.currentText().replace(".", "_")
+        archive_path = parent_folder / img_name_as_folder
+        
+        op = ExportArchiveOperator(self, self.viewer)
+        op.set_root_path(archive_path)
+        
+        self.current_operator = op
+        worker = create_worker(
+            self.current_operator.run,
+            _progress={
+                "desc": "Exporting archive..."
+            },
+        )
+        worker.finished.connect(self.finished_export_archive)
+        worker.start()
+
+    def finished_export_archive(self, *args):
+        if self.current_operator is None:
+            raise ValueError("No operator is currently running.")
+        
+        self.set_enabled(True)
+
+        if not isinstance(self.current_operator, ExportArchiveOperator):
+            raise ValueError("Current operator is not an ExportArchiveOperator.")
+
+        show_info(f"Archive exported.")
+
 
 def run():
     import tifffile as tiff
     from pathlib import Path
+    from .import_archive_operator import ImportArchiveOperator
 
     viewer = napari.Viewer()
     widget = CentrosomesWidget(viewer=viewer)
@@ -682,13 +752,19 @@ def run():
     calib = {'T': 1, 'Y': 0.1083333, 'X': 0.1083333}
     units = {'T': 's', 'Y': 'um', 'X': 'um'}
 
-    image_layer = viewer.add_image(
+    viewer.add_image(
         image, 
         name=filename, 
         scale=(calib['T'], calib['Y'], calib['X']),
         units=(units['T'], units['Y'], units['X']),
         axis_labels=('T', 'Y', 'X')
     )
+
+
+    # archive_path = "/home/clement/Desktop/251119_#4_30_001_016_vsi - C561_tif.zip"
+    # op = ImportArchiveOperator(viewer, widget)
+    # op.set_root_path(archive_path)
+    # op.run()
 
     id1 = widget.tracks_manager_widget.add_track(
         np.array([

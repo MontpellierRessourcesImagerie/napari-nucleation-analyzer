@@ -21,7 +21,6 @@ class MakeKymographOperator:
 
     def set_arcs(self, arcs: dict):
         for centriole_id, arc in arcs.items():
-            print("===", arc.shape)
             if arc.ndim != 3 or arc.shape[2] != 3:
                 raise ValueError(f"Arc for centriole {centriole_id} must have shape (N, 3).")
         self.arcs = arcs
