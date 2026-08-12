@@ -15,21 +15,28 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v2.2.1
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          python-version: 3.12
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
         run: sudo apt-get install -y libxkbcommon-x11-0
+
       - name: Set QT_QPA_PLATFORM
         run: echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install "napari[all]"
           pip install Sphinx sphinx-rtd-theme sphinx-tabs myst-parser
+
       - name: Sphinx build
         run: |
           pip install .
@@ -37,11 +44,16 @@ jobs:
           sphinx-apidoc -T -f -e -o . ../src
           make html
           cd ..
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        with:
-          publish_branch: gh-pages
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
-          force_orphan: true
+
+
+  deploy:
+    needs: docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

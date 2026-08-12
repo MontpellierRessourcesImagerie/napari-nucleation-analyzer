@@ -1,24 +1,8 @@
 
-- Filtrer les tracks vides lors du lancement.
+- Rédiger la documentation.
 - Dans _make_kymograph, s'assurer que les centrioles et les arcs sont dans le même ordre.
 - Vérifier le sens des kymographes, si le temps est inversé, c'est problématique.
   On peut utiliser une fausse image d'intensité avec chaque point de temps qui a une valeur unique.
+- Sauvegarder les hints originaux dans les layers pour pouvoir les retrieve et faire plusieurs essais.
 
 ==========================================================================================
-
-- Avoir un format de données qu'on peut ré-ouvrir dans Napari pour contrôler ce qu'il s'est passé.
-- Ajouter des milestones pour pouvoir restorer l'état ou reset en relançant une étape.
-- Exposer le facteur de stddev à dépasser pour trouver un spot.
-- Exposer plus d'options de preprocessing pour trouver les centrosomes.
-- Pouvoir ajuster le nombre de samples pour chaque point de l'arc.
-- Avoir une méthode auto de calcul du nombre de samples requis pour construire un arc.
-
-==========================================================================================
-
-Créations d'une track de centrosome:
-
-- Faire un "Add centrosome" ou se placer sur la première frame (de façon indifférenciée).
-- Faire une ligne pour indiquer où se trouvent les centrioles du centrosome.
-- Appuyer sur "Start". Il ne faut pas pouvoir set la fin si le début n'est pas set.
-- Il ne faut pas pouvoir set les bornes s'il n'y a pas exactement une ligne.
-- Lors du lancement, il faut ignorer les tracks avec un nombre de lignes différent de 1.

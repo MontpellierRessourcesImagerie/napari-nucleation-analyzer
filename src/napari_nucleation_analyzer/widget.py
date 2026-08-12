@@ -281,6 +281,11 @@ class CentrosomesWidget(QWidget):
         calib = {a: s for a, s in zip(layer.axis_labels, layer.scale)}
         units = {a: u for a, u in zip(layer.axis_labels, layer.units)}
 
+        if set(calib.keys()) != {'T', 'Y', 'X'}:
+            show_warning("Image must have axes T, Y, X.")
+            self.set_enabled(True)
+            return
+
         prominence = self.prominence_input.value()
         searching_range = self.searching_range_input.value()
         memory = self.memory_input.value()
