@@ -44,6 +44,11 @@ jobs:
           sphinx-apidoc -T -f -e -o . ../src
           make html
           cd ..
+      
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/_build/html
 
 
   deploy:
