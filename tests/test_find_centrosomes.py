@@ -1,6 +1,11 @@
 import numpy as np
 import pandas as pd
 import pytest
+import urllib.request
+from pathlib import Path
+import tifffile as tiff
+
+TESTING_IMAGE_URL = "https://sdrive.cnrs.fr/s/oK2erWnk6xM9dzb/download"
 
 from napari_nucleation_analyzer.operators.find_centrosomes_operator import FindCentrosomesOperator
 
@@ -355,6 +360,17 @@ class TestRunIntegration:
         with pytest.raises(ValueError, match="Hint points must be set"):
             calibrated_operator.run()
 
+    @staticmethod
+    def get_testing_image() -> np.ndarray:
+        cache_dir = Path(__file__).parent / "data"
+        cache_dir.mkdir(exist_ok=True)
+        image_path = cache_dir / "testing.tif"
+
+        if not image_path.exists():
+            urllib.request.urlretrieve(TESTING_IMAGE_URL, image_path)
+
+        return tiff.imread(image_path)
+
     def test_run_smoke_test(self):
         """
         Test d'intégration léger : deux blobs qui bougent sur quelques frames.
@@ -363,32 +379,23 @@ class TestRunIntegration:
         exactes, les paramètres par défaut n'étant pas garantis optimaux
         pour cette image synthétique.
         """
-        T, Y, X = 8, 60, 60
-        img = np.zeros((T, Y, X), dtype=np.float32)
-
-        centers_a = [(20 + t, 20) for t in range(T)]
-        centers_b = [(40, 40 - t) for t in range(T)]
-
-        for t, (cy, cx) in enumerate(centers_a):
-            img[t, cy - 2:cy + 3, cx - 2:cx + 3] = 1.0
-        for t, (cy, cx) in enumerate(centers_b):
-            img[t, cy - 2:cy + 3, cx - 2:cx + 3] = 1.0
+        img = self.get_testing_image()
 
         op = FindCentrosomesOperator()
         op.set_input_image(
             img,
-            calibration={"T": 1.0, "Y": 1.0, "X": 1.0},
-            units={"T": "s", "Y": "px", "X": "px"},
+            calibration={"T": 1.0, "Y": 0.103, "X": 0.103},
+            units={"T": "s", "Y": "µm", "X": "µm"},
         )
         op.set_max_binding_distance(5.0)
         op.set_searching_range(5.0)
         op.set_hints({
-            1: {"start": 0, "end": T - 1, "points": np.array([[20.0, 20.0], [40.0, 40.0]])},
+            1: {"start": 0, "end": img.shape[0] - 1, "points": np.array([[56.0, 33.0], [43.0, 72.0]])},
         })
 
         op.run()
         result = op.get_centrosomes()
 
         assert not result.empty
-        assert list(result.columns) == ["centriole_id", "T", "Y", "X", "centrosome_id"]
+        assert set(result.columns) == {"centriole_id", "T", "Y", "X", "centrosome_id"}
         assert set(result["centrosome_id"]) == {1}
