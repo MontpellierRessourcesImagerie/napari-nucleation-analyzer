@@ -16,8 +16,7 @@ Example:
 
     conda create -n napari-nucleation-analyzer -y python=3.12
     conda activate napari-nucleation-analyzer
-    pip install 'napari[all]'
-    napari
+    pip install "napari[all]"
 
 1. Install a frozen dev version
 ===============================
