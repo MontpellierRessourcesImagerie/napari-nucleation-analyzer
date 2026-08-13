@@ -41,5 +41,6 @@ Finally we detect spots on the kymographs to report the number of events per poi
    :maxdepth: 2
    :caption: Content
    
+   install_guide
    user_guide
    workflow

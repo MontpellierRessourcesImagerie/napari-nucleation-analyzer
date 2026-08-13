@@ -15,11 +15,7 @@ class FindCentrosomesOperator:
         self.searching_range = self.default_searching_range()
         self.memory = self.default_memory()
         self.max_binding_distance = self.default_max_binding_distance()
-
-        self.centrosomes = pd.DataFrame(
-            columns=["centriole_id", "T", "Y", "X", "centrosome_id"]
-        )
-
+        self.centrosomes = None
         tp.quiet(True)
 
     @staticmethod
@@ -51,24 +47,17 @@ class FindCentrosomesOperator:
         if self.input_image is None:
             raise ValueError("Input image must be set before setting hint points.")
         for centrosome_id, points_info in hints.items():
-            if not isinstance(points_info, dict):
+            if len(set(points_info.keys()).intersection({"start", "end", "points"})) != 3:
                 raise ValueError(
-                    f"Hint points for centrosome {centrosome_id} must be a dictionary."
+                    f"[{centrosome_id}]: 'start', 'end', and 'points' keys are required."
                 )
-            if (
-                "start" not in points_info
-                or "end" not in points_info
-                or "points" not in points_info
-            ):
+            if points_info["points"].ndim != 2:
                 raise ValueError(
-                    f"Hint points for centrosome {centrosome_id} must contain 'start', 'end', and 'points' keys."
+                    f"[{centrosome_id}]: points must be a 2D numpy array with shape (N, 2)."
                 )
-            if (
-                not isinstance(points_info["points"], np.ndarray)
-                or points_info["points"].shape[1] != 2
-            ):
+            if (points_info["points"].shape[1] != 2):
                 raise ValueError(
-                    f"'points' for centrosome {centrosome_id} must be a 2D numpy array with shape (N, 2)."
+                    f"[{centrosome_id}]: points must be a 2D numpy array with shape (N, 2)."
                 )
             if (
                 points_info["start"] < 0
@@ -155,7 +144,6 @@ class FindCentrosomesOperator:
         img = self.get_input_image()
         raw_image = img.transpose("T", "Y", "X").values.astype(np.float32)
         log_res = np.zeros_like(raw_image)
-        print("Running preprocessing...")
 
         def _apply_for_frame(t):
             median = median_filter(raw_image[t], size=(3, 3))
@@ -203,21 +191,31 @@ class FindCentrosomesOperator:
     def _bind_tracks_to_hints(self, tracked) -> dict:
         bindings = {}
         binding_dist = self.get_max_binding_distance_pxl()
+        used_centrioles = set()
+
         for centrosome_id, hint_info in self.hints.items():
             bindings[centrosome_id] = [None, None]
             start_frame = hint_info["start"]
             hint_points = hint_info["points"]
             candidates = tracked[tracked["T"] == start_frame]
+            
             for i, hint_point in enumerate(hint_points):
-                best_candidate = None
-                min_distance = float("inf")
-                for _, candidate in candidates.iterrows():
-                    distance = np.linalg.norm(candidate[["Y", "X"]].values - hint_point)
-                    if distance < min_distance and distance <= binding_dist:
-                        min_distance = distance
-                        best_candidate = candidate
+                sorted_points = sorted([
+                    (np.linalg.norm(c[["Y", "X"]].values - hint_point), c['centriole_id']) 
+                    for _, c in candidates.iterrows()
+                ], key=lambda x: x[0])
+                sorted_points = [
+                    (dist, cid) 
+                    for dist, cid in sorted_points 
+                    if cid not in used_centrioles and dist <= binding_dist
+                ]
+
+                best_candidate = None if len(sorted_points) == 0 else sorted_points[0][1]
                 if best_candidate is not None:
-                    bindings[centrosome_id][i] = best_candidate["centriole_id"]
+                    used_centrioles.add(best_candidate)
+
+                bindings[centrosome_id][i] = best_candidate
+                
         return bindings
 
     def _filter_by_hint_points(self, tracked) -> pd.DataFrame:
@@ -288,7 +286,9 @@ class FindCentrosomesOperator:
         ).reset_index(drop=True)
 
     @staticmethod
-    def as_lines(centrosomes_df: pd.DataFrame, track_colors: dict) -> tuple[list, list, list]:
+    def as_lines(
+        centrosomes_df: pd.DataFrame, track_colors: dict
+    ) -> tuple[list, list, list]:
         lines = []
         colors = []
         centrosome_ids = []
@@ -304,7 +304,9 @@ class FindCentrosomesOperator:
                 components.append(centriole_points)
             points = np.stack(components, axis=1)
             lines.append([p for p in points])
-            colors.append([track_colors.get(centrosome_id, "#ffffff") for _ in range(len(points))])
+            colors.append(
+                [track_colors.get(centrosome_id, "#ffffff") for _ in range(len(points))]
+            )
             centrosome_ids.append(centrosome_id)
         return centrosome_ids, lines, colors
 
@@ -356,51 +358,5 @@ def launch_full_process():
     napari.run()
 
 
-def test_as_napari_lines():
-    from pathlib import Path
-    import tifffile as tiff
-    import napari
-    import pandas as pd
-
-    DUMP = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump")
-    
-    folder_in = Path("/home/clement/Documents/projects/nucleation/3VPCs")
-    filename = "251119_#4_30_001_016.vsi - C561.tif"
-    path_in = folder_in / filename
-
-    calib = {"T": 1, "Y": 0.1083333, "X": 0.1083333}
-    units = {"T": "s", "Y": "um", "X": "um"}
-
-    img = tiff.imread(path_in)  # (T, Y, X)
-    
-    centrosomes_path = DUMP / "centrosome_points_track.csv"
-    centrosomes_df = pd.read_csv(centrosomes_path)
-
-    track_colors = {1: "#ff0000", 2: "#00ff00"}
-    centrosome_ids, lines, colors = FindCentrosomesOperator.as_lines(centrosomes_df, track_colors)
-
-    viewer = napari.Viewer()
-
-    viewer.add_image(img, name="raw")
-
-    viewer.add_tracks(
-        centrosomes_df[["centriole_id", "T", "Y", "X"]].values,
-        name="tracks",
-        features=centrosomes_df,
-    )
-
-    for c_id, line, color in zip(centrosome_ids, lines, colors):
-        viewer.add_shapes(
-            line,
-            shape_type="line",
-            edge_color=color,
-            name=f"centrosome_line_{c_id}",
-            opacity=0.75,
-            ndim=3
-        )
-    napari.run()
-
-
 if __name__ == "__main__":
-    # launch_full_process()
-    test_as_napari_lines()
+    launch_full_process()

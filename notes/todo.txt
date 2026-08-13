@@ -1,5 +1,5 @@
 
-- Rédiger la documentation.
+- Écrire des tests et les faire passer en GitHub action.
 - Dans _make_kymograph, s'assurer que les centrioles et les arcs sont dans le même ordre.
 - Vérifier le sens des kymographes, si le temps est inversé, c'est problématique.
   On peut utiliser une fausse image d'intensité avec chaque point de temps qui a une valeur unique.
