@@ -26,6 +26,9 @@ a. Detect centrioles
 - On this filtered image, we look for local maxima that are above a user-defined prominence, the 
   prominence being the difference between the local maximum and its most shalow local minimum.
 
+.. math::
+  prominence_{final} = prominence_{user} \cdot StdDev_{filtered}
+
 .. figure:: _images/prominence.png
   :align: center
   :width: 50%

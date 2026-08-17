@@ -102,36 +102,39 @@ b. Calibrate your image
 3. Tune the settings
 ====================
 
-+-----------------------+-----------------------------------------------------------------+
-| Name                  | Description                                                     |
-+=======================+=================================================================+
-| Image                 | This dropdown menu allows you to select the image you           |
-|                       | want to analyze. This is simply the list of image layers        |
-|                       | currently open in Napari.                                       |
-+-----------------------+-----------------------------------------------------------------+
-| Prominence            | This value must stay in the range [0.0, 1.0]. It represents how |
-|                       | much a local maximum on the preprocessed image must be above    |
-|                       | its most shallow local minimum to be considered as a centriole. |
-|                       | The higher this value, the less centrioles will be detected.    |
-|                       | More detailed explanation are available in :doc:`workflow`      |
-+-----------------------+-----------------------------------------------------------------+
-| Searching range       | In the tracking process, how much a centriole is allowed to     |
-|                       | move between two consecutive time points. The higher this value,|
-|                       | the more centrioles will be tracked but the more likely it is to|
-|                       | make mistakes.                                                  |
-+-----------------------+-----------------------------------------------------------------+
-| Memory                | In the tracking process, how many frames a centriole is allowed |
-|                       | to disappear for and still be linked to a trajectory. The       |
-|                       | higher this value, the more robust the tracking will be, but    |
-|                       | the more likely it is to make mistakes. This is useful when     |
-|                       | some centrioles move on another Z.                              |
-+-----------------------+-----------------------------------------------------------------+
-| Max binding distance  | When the actual detected centrioles have to be linked to your   |
-|                       | manually drawn hints, this value is the maximum distance        |
-|                       | allowed between a detected centriole and a hint. If a detected  |
-|                       | centriole is further than this distance from a hint, it won't   |
-|                       | be linked to it.                                                |
-+-----------------------+-----------------------------------------------------------------+
++-----------------------+--------------------------------------------------------------------+------------+
+| Name                  | Description                                                        | Default    |
++=======================+====================================================================+============+
+| Image                 | This dropdown menu allows you to select the image you want to      |            |
+|                       | analyze. This is simply the list of image layers currently open in |            |
+|                       | Napari.                                                            |            |
++-----------------------+--------------------------------------------------------------------+------------+
+| Prominence            | This value must be strictly positive. It is a factor that          | ×10.0      |
+|                       | represents how much a local maximum on the preprocessed image must |            |
+|                       | be above the filtered image's standard deviation to be considered  |            |
+|                       | as a centriole. A local maximum on the preprocessed image must be  |            |
+|                       | above its most shallow local minimum to be considered as a         |            |
+|                       | centriole. The higher this value, the less centrioles will be      |            |
+|                       | detected. More detailed explanation are available in               |            |
+|                       | :doc:`workflow`                                                    |            |
++-----------------------+--------------------------------------------------------------------+------------+
+| Searching range       | In the tracking process, how much a centriole is allowed to move   | 3.25 µm    |
+|                       | between two consecutive time points. The higher this value, the    |            |
+|                       | more centrioles will be tracked but the more likely it is to make  |            |
+|                       | mistakes.                                                          |            |
++-----------------------+--------------------------------------------------------------------+------------+
+| Memory                | In the tracking process, how many frames a centriole is allowed to | 10 f       |
+|                       | disappear for and still be linked to a trajectory. The higher this |            |
+|                       | value, the more robust the tracking will be, but the more likely   |            |
+|                       | it is to make mistakes. This is useful when some centrioles move   |            |
+|                       | on another Z.                                                      |            |
++-----------------------+--------------------------------------------------------------------+------------+
+| Max binding distance  | When the actual detected centrioles have to be linked to your      | 0.6 µm     |
+|                       | manually drawn hints, this value is the maximum distance allowed   |            |
+|                       | between a detected centriole and a hint. If a detected centriole   |            |
+|                       | is further than this distance from a hint, it won't be linked to   |            |
+|                       | it.                                                                |            |
++-----------------------+--------------------------------------------------------------------+------------+
 
 4. Launch the calculation
 =========================

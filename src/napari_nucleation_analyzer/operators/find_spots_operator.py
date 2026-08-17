@@ -1,7 +1,7 @@
 import numpy as np
-from skimage.feature import peak_local_max
-from scipy.ndimage import gaussian_laplace
-import pandas as pd
+from scipy.ndimage import gaussian_laplace, gaussian_filter
+from skimage.morphology import h_maxima
+from concurrent.futures import ThreadPoolExecutor
 
 class FindSpotsOperator:
 
@@ -12,7 +12,7 @@ class FindSpotsOperator:
 
     @staticmethod
     def default_std_coeff():
-        return 1.5
+        return 1.0
 
     def set_kymographs(self, kymographs):
         self.kymographs = kymographs
@@ -34,16 +34,20 @@ class FindSpotsOperator:
         Write them in a buffer having the same size as the kymo and make a sum projection of it to keep only the time axis.
         Make a new dataframe with each column corresponding to a track id.
         """
-        buffer = {}
-        for centriole_id, kymo in kymographs.items():
-            kymo = gaussian_laplace(kymo, sigma=2)
-            kymo *= -1
-            coordinates = peak_local_max(
-                kymo,
-                min_distance=2,
-                threshold_abs=np.std(kymo) * self.std_coeff
-            )
+        buffer = {centriole_id: np.zeros((0, 2), dtype=int) for centriole_id in kymographs.keys()}
+
+        def _find_spots_kymo(centriole_id, kymo):
+            kymo = gaussian_filter(kymo, sigma=(0.1, 0.5))
+            kymo -= np.min(kymo)
+            kymo /= np.max(kymo)
+            # kymo = (-1 * kymo + 1)
+            peaks = h_maxima(kymo, h=np.std(kymo) * self.std_coeff)
+            coordinates = np.argwhere(peaks)
             buffer[centriole_id] = coordinates
+
+        with ThreadPoolExecutor() as executor:
+            executor.map(lambda args: _find_spots_kymo(*args), kymographs.items())
+        
         return buffer
     
     def run(self):
@@ -69,6 +73,7 @@ if __name__ == "__main__":
     # Running the operator
     op = FindSpotsOperator()
     op.set_kymographs(kymographs)
+    op.set_std_coeff(0.5)
     op.run()
 
     # Showing the result in Napari
@@ -86,7 +91,7 @@ if __name__ == "__main__":
         viewer.add_points(
             coords, 
             name=f"Spots {centriole_id}", 
-            size=5, 
+            size=3, 
             face_color='transparent',
             border_color='red',
             translate=[0, translation]

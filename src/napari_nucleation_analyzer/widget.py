@@ -120,7 +120,8 @@ class CentrosomesWidget(QWidget):
         h_layout = QHBoxLayout()
         h_layout.addWidget(QLabel("Prominence"))
         self.prominence_input = QDoubleSpinBox()
-        self.prominence_input.setRange(0.0, 100.0)
+        self.prominence_input.setRange(0.0, 999.0)
+        self.prominence_input.setSingleStep(0.5)
         self.prominence_input.setValue(FindCentrosomesOperator.default_prominence())
         h_layout.addWidget(self.prominence_input)
         layout.addLayout(h_layout)
@@ -183,6 +184,7 @@ class CentrosomesWidget(QWidget):
         self.radius_input = QDoubleSpinBox()
         self.radius_input.setRange(0.0, 100.0)
         self.radius_input.setValue(2.0)
+        self.radius_input.setSingleStep(0.1)
         h_layout.addWidget(self.radius_input)
         layout.addLayout(h_layout)
 
@@ -192,6 +194,7 @@ class CentrosomesWidget(QWidget):
         self.angle_input = QDoubleSpinBox()
         self.angle_input.setRange(0.0, 360.0)
         self.angle_input.setValue(90.0)
+        self.angle_input.setSingleStep(5.0)
         h_layout.addWidget(self.angle_input)
         layout.addLayout(h_layout)
 
@@ -262,21 +265,28 @@ class CentrosomesWidget(QWidget):
 
     def launch_find_centrosomes(self):
         image_layer_name = self.image_combo.currentText()
-        hints = self.tracks_manager_widget.as_hints()
 
         if image_layer_name not in self.viewer.layers:
             show_warning("Selected image layer not found.")
             return
         
+        layer = self.viewer.layers[image_layer_name]
+        hints = (
+            self.tracks_manager_widget.as_hints()
+            if 'hints' not in layer.metadata
+            else layer.metadata['hints']
+        )
+        
         if hints is None:
             show_warning("No hints found.")
             return
+
+        layer.metadata['hints'] = hints
         
         self.set_enabled(False)
 
         op = FindCentrosomesOperator()
 
-        layer = self.viewer.layers[image_layer_name]
         image = layer.data
         calib = {a: s for a, s in zip(layer.axis_labels, layer.scale)}
         units = {a: u for a, u in zip(layer.axis_labels, layer.units)}
@@ -300,8 +310,16 @@ class CentrosomesWidget(QWidget):
         
         self.current_operator = op
 
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during centrosome finding: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
+
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Building centrosomes..."
             },
@@ -311,7 +329,7 @@ class CentrosomesWidget(QWidget):
 
     def finished_find_centrosomes(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
 
         self.set_enabled(True)
 
@@ -392,10 +410,19 @@ class CentrosomesWidget(QWidget):
         op.set_angle(angle)
         op.set_radius(radius)
         op.set_centrosomes(tracked_centrosomes)
+
         self.current_operator = op
 
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during arc building: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
+
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Building arcs..."
             },
@@ -405,7 +432,8 @@ class CentrosomesWidget(QWidget):
 
     def finished_build_arcs(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
+        
         self.set_enabled(True)
         if not isinstance(self.current_operator, BuildArcsOperator):
             raise ValueError("Current operator is not a BuildArcsOperator.")
@@ -420,6 +448,10 @@ class CentrosomesWidget(QWidget):
         for centriole_id, arc in arcs.items():
             centrosome_id = int(pairs[centriole_id])
             color = self.tracks_manager_widget._rows[centrosome_id].color
+            layer_name = f"{self.arcs_shapes_prefix}{centriole_id}"
+            if layer_name in self.viewer.layers:
+                layer = self.viewer.layers[layer_name]
+                self.viewer.layers.remove(layer)
             self.viewer.add_shapes(
                 arc,
                 shape_type='path',
@@ -460,17 +492,25 @@ class CentrosomesWidget(QWidget):
 
         arcs = self._gather_arcs()
         centrosomes = self.viewer.layers[centrosomes_layer_name].features
+        self.set_enabled(False)
 
         op = MakeKymographOperator()
-        self.set_enabled(False)
-        self.current_operator = op
-
         op.set_input_image(image, scale, units)
         op.set_arcs(arcs)
         op.set_centrosomes(centrosomes)
 
+        self.current_operator = op
+
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during kymograph building: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
+
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Building kymographs..."
             },
@@ -478,9 +518,17 @@ class CentrosomesWidget(QWidget):
         worker.finished.connect(self.finished_build_kymographs)
         worker.start()
 
+    def _get_image_dims(self):
+        image_layer_name = self.image_combo.currentText()
+        if image_layer_name not in self.viewer.layers:
+            raise ValueError("Selected image layer not found.")
+        image_layer = self.viewer.layers[image_layer_name]
+        dims = {a: (c, s) for a, c, s in zip(image_layer.axis_labels, image_layer.scale, image_layer.data.shape)}
+        return dims
+
     def finished_build_kymographs(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
         
         self.set_enabled(True)
 
@@ -501,10 +549,9 @@ class CentrosomesWidget(QWidget):
 
         kymographs = self.current_operator.get_kymographs()
         padding = 10
-
-        # Hide all the layers except the original image
-        for layer in self.viewer.layers:
-            layer.visible = False
+        dims = self._get_image_dims()
+        scale = (dims['Y'][0], dims['X'][0])
+        start_x = dims['X'][1] + padding
 
         # create a list of polygons
         polygons = []
@@ -512,10 +559,10 @@ class CentrosomesWidget(QWidget):
             kymograph = kymographs[centriole_id]
             T, Y = kymograph.shape
             polygon = np.array([
-                [0, i * (Y + padding)],
-                [T - 1, i * (Y + padding)],
-                [T - 1, i * (Y + padding) + Y - 1],
-                [0, i * (Y + padding) + Y - 1],
+                [0, i * (Y + padding) + start_x],
+                [T - 1, i * (Y + padding) + start_x],
+                [T - 1, i * (Y + padding) + Y - 1 + start_x],
+                [0, i * (Y + padding) + Y - 1 + start_x],
             ])
             polygons.append(polygon)
 
@@ -529,15 +576,20 @@ class CentrosomesWidget(QWidget):
             'string': 'C{centrosome_id} -> c{centriole_id}',
             'anchor': 'upper_left',
             'translation': [-5, 0],
-            'size': 16,
+            'size': 10,
             'color': 'white',
         }
 
         colors = [self.tracks_manager_widget._rows[int(pairs[centriole_id])].color for centriole_id in centriole_ids]
 
+        if "kymo_outlines" in self.viewer.layers:
+            layer = self.viewer.layers["kymo_outlines"]
+            self.viewer.layers.remove(layer)
+
         self.viewer.add_shapes(
             polygons,
             opacity=1.0,
+            scale=scale,
             features=features,
             shape_type='polygon',
             edge_width=3,
@@ -550,11 +602,15 @@ class CentrosomesWidget(QWidget):
         # add the images
         for i, centriole_id in enumerate(centriole_ids):
             kymograph = kymographs[centriole_id]
+            name = f"{self.kymo_prefix}{centriole_id}"
+            if name in self.viewer.layers:
+                layer = self.viewer.layers[name]
+                self.viewer.layers.remove(layer)
             self.viewer.add_image(
                 kymograph,
-                name=f"{CentrosomesWidget.kymo_prefix}{centriole_id}",
-                scale=(1, 1),
-                translate=(0, i * (kymograph.shape[1] + padding)),
+                name=name,
+                scale=scale,
+                translate=(0, (i * (kymograph.shape[1] + padding) + start_x) * scale[1]),
                 colormap='turbo'
             )
 
@@ -579,13 +635,20 @@ class CentrosomesWidget(QWidget):
 
         op = FindSpotsOperator()
         op.set_std_coeff(spots_promi)
+        op.set_kymographs(kymographs)
 
         self.current_operator = op
 
-        op.set_kymographs(kymographs)
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during spot location: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
 
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Locating spots in kymographs..."
             },
@@ -595,7 +658,7 @@ class CentrosomesWidget(QWidget):
 
     def finished_locate_spots(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
         
         self.set_enabled(True)
 
@@ -617,16 +680,15 @@ class CentrosomesWidget(QWidget):
             spots_layer_name = f"{CentrosomesWidget.spots_layer_prefix}{centriole_id}"
             if spots_layer_name in self.viewer.layers:
                 layer = self.viewer.layers[spots_layer_name]
-                layer.data = coords
-            else:
-                self.viewer.add_points(
-                    coords,
-                    name=f"{CentrosomesWidget.spots_layer_prefix}{centriole_id}",
-                    scale=kymo_layer.scale,
-                    face_color='transparent',
-                    size=5,
-                    translate=kymo_layer.translate
-                )
+                self.viewer.layers.remove(layer)
+            self.viewer.add_points(
+                coords,
+                name=f"{CentrosomesWidget.spots_layer_prefix}{centriole_id}",
+                scale=kymo_layer.scale,
+                face_color='transparent',
+                size=3,
+                translate=kymo_layer.translate
+            )
 
     def _gather_spots(self):
         spots = {}
@@ -657,15 +719,24 @@ class CentrosomesWidget(QWidget):
         centrosomes_df = self.viewer.layers[tracked_centrosomes_layer_name].features
 
         self.set_enabled(False)
-        op = SummaryOperator()
-        self.current_operator = op
 
+        op = SummaryOperator()
         op.set_centrosomes(centrosomes_df)
         op.set_kymographs(kymographs)
         op.set_spots(spots)
 
+        self.current_operator = op
+
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during summary export: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
+
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Exporting summary..."
             },
@@ -675,7 +746,7 @@ class CentrosomesWidget(QWidget):
 
     def finished_export_summary(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
         
         self.set_enabled(True)
 
@@ -712,8 +783,17 @@ class CentrosomesWidget(QWidget):
         op.set_root_path(archive_path)
         
         self.current_operator = op
+
+        def runner():
+            try:
+                return self.current_operator.run() if self.current_operator is not None else None
+            except Exception as e:
+                show_warning(f"Error during archive export: {str(e)}")
+                self.set_enabled(True)
+                self.current_operator = None
+
         worker = create_worker(
-            lambda: self.current_operator.run() if self.current_operator is not None else None,
+            runner,
             _progress={
                 "desc": "Exporting archive..."
             },
@@ -723,7 +803,7 @@ class CentrosomesWidget(QWidget):
 
     def finished_export_archive(self, *args):
         if self.current_operator is None:
-            raise ValueError("No operator is currently running.")
+            return
         
         self.set_enabled(True)
 

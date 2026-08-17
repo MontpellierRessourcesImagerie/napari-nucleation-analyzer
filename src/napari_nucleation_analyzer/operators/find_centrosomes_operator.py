@@ -5,6 +5,7 @@ import trackpy as tp
 from skimage.morphology import h_maxima
 from concurrent.futures import ThreadPoolExecutor
 from scipy.ndimage import grey_opening, gaussian_laplace, median_filter
+from pprint import pprint
 
 
 class FindCentrosomesOperator:
@@ -20,7 +21,7 @@ class FindCentrosomesOperator:
 
     @staticmethod
     def default_prominence() -> float:
-        return 0.15
+        return 10.0
 
     @staticmethod
     def default_searching_range() -> float:
@@ -69,8 +70,8 @@ class FindCentrosomesOperator:
         self.hints = hints
 
     def set_prominence(self, prominence: float):
-        if prominence <= 0 or prominence >= 1:
-            raise ValueError("Prominence must be a value between 0 and 1.")
+        if prominence <= 0:
+            raise ValueError("Prominence must be a strictly positive value.")
         self.prominence = prominence
 
     def set_searching_range(self, searching_range: float):
@@ -150,7 +151,7 @@ class FindCentrosomesOperator:
             background = grey_opening(median, size=(20, 20))
             no_bg = median - background
             no_bg[no_bg < 0] = 0.0
-            log_res[t] = gaussian_laplace(no_bg, sigma=(5, 5))
+            log_res[t] = gaussian_laplace(no_bg, sigma=(5.0, 5.0))
 
         with ThreadPoolExecutor() as executor:
             executor.map(_apply_for_frame, range(raw_image.shape[0]))
@@ -161,8 +162,11 @@ class FindCentrosomesOperator:
         return log_res
 
     def _find_maximas(self, log_res) -> pd.DataFrame:
+        std_dev = np.std(log_res)
+        prom = std_dev * self.prominence
+        print(f"Prominence for centrioles: {prom:.4f}")
         def _process_frame(t):
-            coords = h_maxima(log_res[t], h=self.prominence)
+            coords = h_maxima(log_res[t], h=prom)
             coords = np.argwhere(coords)
             return [{"T": t, "Y": c[0], "X": c[1]} for c in coords]
 
@@ -189,28 +193,45 @@ class FindCentrosomesOperator:
         return spots_df
 
     def _bind_tracks_to_hints(self, tracked) -> dict:
-        bindings = {}
+        bindings = {} # centrosome_id -> [centriole_id1, centriole_id2]
         binding_dist = self.get_max_binding_distance_pxl()
         used_centrioles = set()
+        tracks_span = {
+            centriole_id: group["T"].max() - group["T"].min() 
+            for centriole_id, group in tracked.groupby("centriole_id")
+        }
+        print("Tracks span (in frames):")
+        pprint(tracks_span)
 
         for centrosome_id, hint_info in self.hints.items():
             bindings[centrosome_id] = [None, None]
             start_frame = hint_info["start"]
+            end_frame = hint_info["end"]
             hint_points = hint_info["points"]
             candidates = tracked[tracked["T"] == start_frame]
             
             for i, hint_point in enumerate(hint_points):
+                # sorted tuples: (distance, centriole_id) for the starting frame
                 sorted_points = sorted([
                     (np.linalg.norm(c[["Y", "X"]].values - hint_point), c['centriole_id']) 
                     for _, c in candidates.iterrows()
                 ], key=lambda x: x[0])
+                # filter: remove already used; remove too far away
                 sorted_points = [
                     (dist, cid) 
                     for dist, cid in sorted_points 
                     if cid not in used_centrioles and dist <= binding_dist
                 ]
+                # candidate centriole id
+                best_candidate = None
+                # desired length of the track for this hint
+                current_hint_duration = end_frame - start_frame
+                
+                for _, centriole_id in sorted_points:
+                    if tracks_span[centriole_id] >= current_hint_duration:
+                        best_candidate = centriole_id
+                        break
 
-                best_candidate = None if len(sorted_points) == 0 else sorted_points[0][1]
                 if best_candidate is not None:
                     used_centrioles.add(best_candidate)
 
@@ -218,25 +239,24 @@ class FindCentrosomesOperator:
                 
         return bindings
 
-    def _filter_by_hint_points(self, tracked) -> pd.DataFrame:
+    def _find_centrosomes(self, tracked) -> pd.DataFrame:
         bindings = self._bind_tracks_to_hints(tracked)
         tracked = tracked.copy()
         tracked["centrosome_id"] = 0
 
         for centrosome_id, centriole_ids in bindings.items():
             t1, t2 = centriole_ids
-            if t1 is not None:
-                tracked.loc[tracked["centriole_id"] == t1, "centrosome_id"] = (
-                    centrosome_id
-                )
-            if t2 is not None:
-                tracked.loc[tracked["centriole_id"] == t2, "centrosome_id"] = (
-                    centrosome_id
-                )
             if t1 is None or t2 is None:
                 raise ValueError(
                     f"Failed to bind centrosomes to hints for centrosome {centrosome_id}."
                 )
+            tracked.loc[tracked["centriole_id"] == t1, "centrosome_id"] = (
+                centrosome_id
+            )
+            tracked.loc[tracked["centriole_id"] == t2, "centrosome_id"] = (
+                centrosome_id
+            )
+            
 
         tracked = tracked[tracked["centrosome_id"] != 0]
         return tracked
@@ -278,7 +298,7 @@ class FindCentrosomesOperator:
         maximas = self._find_maximas(preprocessed)
 
         tracked = self._track_spots(maximas)
-        tracked = self._filter_by_hint_points(tracked)
+        tracked = self._find_centrosomes(tracked)
         tracked = self._interpolate_missing_time_points(tracked)
 
         self.centrosomes = tracked.sort_values(
@@ -334,6 +354,7 @@ def launch_full_process():
     operator = FindCentrosomesOperator()
     operator.set_input_image(img, calib, units)
     operator.set_hints(hints)
+    operator.set_prominence(10.0)
     operator.run()
 
     centrosomes = operator.get_centrosomes()

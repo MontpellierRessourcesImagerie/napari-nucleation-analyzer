@@ -1,8 +1,15 @@
 
-- Écrire des tests et les faire passer en GitHub action.
-- Dans _make_kymograph, s'assurer que les centrioles et les arcs sont dans le même ordre.
-- Vérifier le sens des kymographes, si le temps est inversé, c'est problématique.
-  On peut utiliser une fausse image d'intensité avec chaque point de temps qui a une valeur unique.
-- Sauvegarder les hints originaux dans les layers pour pouvoir les retrieve et faire plusieurs essais.
+- [!] La prominence absolue n'a pas l'air d'être une valeur sure pour la détection des centrioles.
+      Il faudrait pouvoir scale par quelque chose (la stddev ?)
+- [!] Ajouter la valeur du LoG dans le dataframe avant tracking et l'utiliser dans le calcul
+      de distance pour essayer de moins perdre les centrioles.
+- [ ] Écrire des tests.
+- [ ] Dans _make_kymograph, s'assurer que les centrioles et les arcs sont dans le même ordre.
+- [ ] Vérifier le sens des kymographes, si le temps est inversé, c'est problématique.
+      On peut utiliser une fausse image d'intensité avec chaque point de temps qui a une valeur 
+      unique.
+- [ ] Sauvegarder les hints originaux dans les layers pour pouvoir les retrieve et faire 
+      plusieurs essais.
 
 ==========================================================================================
+
