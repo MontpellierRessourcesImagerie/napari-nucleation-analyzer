@@ -298,7 +298,7 @@ class TracksManagerWidget(QWidget):
             name=layer_name, 
             shape_type="line", 
             edge_color=self._next_color(), 
-            edge_width=2, 
+            edge_width=1, 
             face_color='transparent', 
             opacity=0.75, 
             visible=True,

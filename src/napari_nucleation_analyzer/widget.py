@@ -382,7 +382,7 @@ class CentrosomesWidget(QWidget):
                 ndim=3,
                 scale=image_layer.scale,
                 units=image_layer.units,
-                edge_width=2
+                edge_width=1
             )
 
         self.current_operator = None
@@ -430,6 +430,30 @@ class CentrosomesWidget(QWidget):
         worker.finished.connect(self.finished_build_arcs)
         worker.start()
 
+    def _distances_as_features(self, centrosome_id, df, scale):
+        df = df[df['centrosome_id'] == centrosome_id]
+        if df.empty:
+            raise ValueError(f"No centrioles found for centrosome_id {centrosome_id}.")
+        df = df.sort_values(by=['centriole_id', 'T'])
+        df = df.iloc[len(df) // 2:]
+        df = df['distance'] * scale['X'][0]
+        df = df.reset_index(drop=True)
+        return df
+
+    def _add_centrosome_distance(self, centrosome_id, df, scale):
+        distances = self._distances_as_features(centrosome_id, df, scale)
+        centrosome_layer_name = self.tracks_manager_widget.as_track_layer_name(centrosome_id)
+        centrosome_layer = self.viewer.layers[centrosome_layer_name]
+        centrosome_layer.features['distance'] = np.round(distances, 2)
+        unit = scale['X'][2]
+        text = {
+            'string': '{distance}'+format(unit, '~'),
+            'anchor': 'center',
+            'size': 10,
+            'color': 'white',
+        }
+        centrosome_layer.text = text
+
     def finished_build_arcs(self, *args):
         if self.current_operator is None:
             return
@@ -440,10 +464,16 @@ class CentrosomesWidget(QWidget):
         
         arcs = self.current_operator.get_arcs()
         pairs = self.current_operator.get_pairs(flipped=True)
+        df = self.current_operator.get_centrosomes()
 
         image_layer_name = self.image_combo.currentText()
         image_layer = self.viewer.layers[image_layer_name]
         image_layer.metadata['centrioles-pairs'] = pairs
+        dims = self._get_image_dims()
+
+        centrioles_layer_name = self.centrioles_tracks_prefix + image_layer_name
+        centrioles_layer = self.viewer.layers[centrioles_layer_name]
+        centrioles_layer.features = df
 
         for centriole_id, arc in arcs.items():
             centrosome_id = int(pairs[centriole_id])
@@ -452,11 +482,12 @@ class CentrosomesWidget(QWidget):
             if layer_name in self.viewer.layers:
                 layer = self.viewer.layers[layer_name]
                 self.viewer.layers.remove(layer)
+            self._add_centrosome_distance(centrosome_id, df, dims)
             self.viewer.add_shapes(
                 arc,
                 shape_type='path',
                 edge_color=color,
-                edge_width=2,
+                edge_width=1,
                 face_color='transparent',
                 opacity=0.75,
                 name=f"{self.arcs_shapes_prefix}{centriole_id}",
@@ -523,7 +554,7 @@ class CentrosomesWidget(QWidget):
         if image_layer_name not in self.viewer.layers:
             raise ValueError("Selected image layer not found.")
         image_layer = self.viewer.layers[image_layer_name]
-        dims = {a: (c, s) for a, c, s in zip(image_layer.axis_labels, image_layer.scale, image_layer.data.shape)}
+        dims = {a: (c, s, u) for a, c, s, u in zip(image_layer.axis_labels, image_layer.scale, image_layer.data.shape, image_layer.units)}
         return dims
 
     def finished_build_kymographs(self, *args):
@@ -551,6 +582,7 @@ class CentrosomesWidget(QWidget):
         padding = 10
         dims = self._get_image_dims()
         scale = (dims['Y'][0], dims['X'][0])
+        units = (dims['Y'][2], dims['X'][2])
         start_x = dims['X'][1] + padding
 
         # create a list of polygons
@@ -590,6 +622,7 @@ class CentrosomesWidget(QWidget):
             polygons,
             opacity=1.0,
             scale=scale,
+            units=units,
             features=features,
             shape_type='polygon',
             edge_width=3,
@@ -610,6 +643,7 @@ class CentrosomesWidget(QWidget):
                 kymograph,
                 name=name,
                 scale=scale,
+                units=units,
                 translate=(0, (i * (kymograph.shape[1] + padding) + start_x) * scale[1]),
                 colormap='turbo'
             )
@@ -685,6 +719,7 @@ class CentrosomesWidget(QWidget):
                 coords,
                 name=f"{CentrosomesWidget.spots_layer_prefix}{centriole_id}",
                 scale=kymo_layer.scale,
+                units=kymo_layer.units,
                 face_color='transparent',
                 size=3,
                 translate=kymo_layer.translate
