@@ -119,7 +119,7 @@ class TestSetHints:
 
 class TestNumericSetters:
 
-    @pytest.mark.parametrize("value", [0, 1, -0.1, 1.1])
+    @pytest.mark.parametrize("value", [-0.1, 0.0])
     def test_prominence_invalid(self, operator, value):
         with pytest.raises(ValueError):
             operator.set_prominence(value)
@@ -213,7 +213,7 @@ class TestBindTracksToHints:
     def test_binds_closest_candidate(self):
         op = self._make_operator_with_unit_scale()
         op.hints = {
-            1: {"start": 0, "end": 5, "points": np.array([[10.0, 10.0]])},
+            1: {"start": 0, "end": 0, "points": np.array([[10.0, 10.0]])},
         }
         tracked = pd.DataFrame({
             "T": [0, 0, 0],
@@ -241,7 +241,7 @@ class TestBindTracksToHints:
 
 
 # ----------------------------------------------------------------------
-# _filter_by_hint_points
+# _find_pairs
 # ----------------------------------------------------------------------
 
 class TestFilterByHintPoints:
@@ -259,12 +259,12 @@ class TestFilterByHintPoints:
             "centrosome_id": [1],
         })
         with pytest.raises(ValueError, match="Failed to bind"):
-            calibrated_operator._filter_by_hint_points(tracked)
+            calibrated_operator._find_pairs(tracked)
 
     def test_filters_correctly_on_success(self, calibrated_operator):
         calibrated_operator.set_max_binding_distance(1000.0)
         calibrated_operator.hints = {
-            1: {"start": 0, "end": 5, "points": np.array([[1.0, 1.0], [50.0, 50.0]])},
+            1: {"start": 0, "end": 0, "points": np.array([[1.0, 1.0], [50.0, 50.0]])},
         }
         tracked = pd.DataFrame({
             "T": [0, 0, 0],
@@ -272,7 +272,7 @@ class TestFilterByHintPoints:
             "X": [1.0, 50.0, 99.0],
             "centrosome_id": [1, 2, 3],
         })
-        result = calibrated_operator._filter_by_hint_points(tracked)
+        result = calibrated_operator._find_pairs(tracked)
         assert set(result["centrosome_id"]) == {1, 2}
         assert set(result["pair_id"]) == {1}
 
@@ -372,13 +372,6 @@ class TestRunIntegration:
         return tiff.imread(image_path)
 
     def test_run_smoke_test(self):
-        """
-        Test d'intégration léger : deux blobs qui bougent sur quelques frames.
-        Vérifie que le pipeline complet tourne sans erreur et produit un
-        résultat cohérent -- pas un test de précision sur les positions
-        exactes, les paramètres par défaut n'étant pas garantis optimaux
-        pour cette image synthétique.
-        """
         img = self.get_testing_image()
 
         op = FindPairsOperator()
@@ -387,10 +380,15 @@ class TestRunIntegration:
             calibration={"T": 1.0, "Y": 0.103, "X": 0.103},
             units={"T": "s", "Y": "µm", "X": "µm"},
         )
-        op.set_max_binding_distance(5.0)
-        op.set_searching_range(5.0)
+        op.set_prominence(5.0)
+        op.set_searching_range(3.25)
+        op.set_max_binding_distance(0.6)
         op.set_hints({
-            1: {"start": 0, "end": img.shape[0] - 1, "points": np.array([[56.0, 33.0], [43.0, 72.0]])},
+            1: {
+                "start": 0, 
+                "end": img.shape[0] - 1, 
+                "points": np.array([[56.0, 35.0], [46.0, 72.0]])
+            },
         })
 
         op.run()
