@@ -6,13 +6,9 @@ Detect spots over time on kymographs
 ===============
 
 The detection of spots on kymographs is done using the same principle as the detection of 
-centrioles: we search for local maxima on a prefiltered image. The only difference is the 
-way the prominence is computed.
+centrosomes: we search for local maxima on a prefiltered image.
 
-When we were detecting centrioles, you were providing the prominence value and it was used 
-as such to determine local maxima.
-
-Here, the **spot prominence** parameter is actually a factor. The base prominence is individually 
+Here, the **spot prominence** parameter is a factor. The base prominence is individually 
 computed for each kymograph and is equal to the standard deviation of the pixel values on the kymograph. 
 The final prominence is this base prominence multiplied by the **spot prominence** factor. 
 The base value is 1.0 (since it is a factor) and the higher the factor, the less spots will be detected.
@@ -21,7 +17,7 @@ Spots will be displayed as gray circles on each kymograph.
 
 .. figure:: _images/detected_spots.png
   :align: center
-  :width: 60%
+  :width: 25%
 
   The gray circles are the detected spots on the kymographs.
 
@@ -37,8 +33,8 @@ The produced file is a CSV file. All the columns start with either **T** or **Co
 - **T** is the index of the time point at which the event occured.
 - **Count** is the number of events that occured at this time point on this kymograph.
 
-The second part of each column name is an expression of the form **[CXX -> cYY]** with XX being 
-the ID of the centrosome and YY being the ID of the centriole.
+The second part of each column name is an expression of the form **[PXX -> cYY]** with XX being 
+the ID of the pair and YY being the ID of the centrosome.
 
 .. figure:: _images/spreadsheet.png
   :align: center
@@ -61,3 +57,12 @@ You can re-open this archive whenever you want. To do so, you have to:
 
 It should restore the whole process **for visualization only**, you cannot use that as a 
 starting point to continue the analysis. 
+
+3. Analyze the next image
+=========================
+
+To reset your workspace and analyze another image, you can:
+
+1. Click on any layer in your layers list, press Ctrl + A to select all layers, then click 
+   on the trash can icon to delete all layers.
+2. In the "Pair tracks" sub-section of the plugin, click on the "Clear all" button to reset all the hints.

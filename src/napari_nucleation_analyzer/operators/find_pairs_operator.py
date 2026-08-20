@@ -8,7 +8,7 @@ from scipy.ndimage import grey_opening, gaussian_laplace, median_filter
 from pprint import pprint
 
 
-class FindCentrosomesOperator:
+class FindPairsOperator:
     def __init__(self):
         self.input_image = None
         self.hints = {}
@@ -16,7 +16,7 @@ class FindCentrosomesOperator:
         self.searching_range = self.default_searching_range()
         self.memory = self.default_memory()
         self.max_binding_distance = self.default_max_binding_distance()
-        self.centrosomes = None
+        self.pairs = None
         tp.quiet(True)
 
     @staticmethod
@@ -47,25 +47,25 @@ class FindCentrosomesOperator:
     def set_hints(self, hints: dict):
         if self.input_image is None:
             raise ValueError("Input image must be set before setting hint points.")
-        for centrosome_id, points_info in hints.items():
+        for pair_id, points_info in hints.items():
             if len(set(points_info.keys()).intersection({"start", "end", "points"})) != 3:
                 raise ValueError(
-                    f"[{centrosome_id}]: 'start', 'end', and 'points' keys are required."
+                    f"[{pair_id}]: 'start', 'end', and 'points' keys are required."
                 )
             if points_info["points"].ndim != 2:
                 raise ValueError(
-                    f"[{centrosome_id}]: points must be a 2D numpy array with shape (N, 2)."
+                    f"[{pair_id}]: points must be a 2D numpy array with shape (N, 2)."
                 )
             if (points_info["points"].shape[1] != 2):
                 raise ValueError(
-                    f"[{centrosome_id}]: points must be a 2D numpy array with shape (N, 2)."
+                    f"[{pair_id}]: points must be a 2D numpy array with shape (N, 2)."
                 )
             if (
                 points_info["start"] < 0
                 or points_info["end"] >= self.input_image.sizes["T"]
             ):
                 raise ValueError(
-                    f"'start' and 'end' for centrosome {centrosome_id} must be within the time range of the input image (0 to {self.input_image.sizes['T'] - 1})."
+                    f"'start' and 'end' for pair {pair_id} must be within the time range of the input image (0 to {self.input_image.sizes['T'] - 1})."
                 )
         self.hints = hints
 
@@ -134,12 +134,12 @@ class FindCentrosomesOperator:
             np.ceil(self.max_binding_distance / self.input_image.attrs["scale"]["X"])
         )
 
-    def get_centrosomes(self) -> pd.DataFrame:
-        if self.centrosomes is None:
+    def get_pairs(self) -> pd.DataFrame:
+        if self.pairs is None:
             raise ValueError(
-                "Centrosomes have not been computed yet. Run the operator first."
+                "Pairs have not been computed yet. Run the operator first."
             )
-        return self.centrosomes
+        return self.pairs
 
     def _tracking_pre_processing(self) -> np.ndarray:
         img = self.get_input_image()
@@ -164,7 +164,7 @@ class FindCentrosomesOperator:
     def _find_maximas(self, log_res) -> pd.DataFrame:
         std_dev = np.std(log_res)
         prom = std_dev * self.prominence
-        print(f"Prominence for centrioles: {prom:.4f}")
+        print(f"Prominence for centrosomes: {prom:.4f}")
         def _process_frame(t):
             coords = h_maxima(log_res[t], h=prom)
             coords = np.argwhere(coords)
@@ -189,76 +189,76 @@ class FindCentrosomesOperator:
             adaptive_stop=0.01,
             adaptive_step=0.75,
         )
-        spots_df["centriole_id"] = linked["particle"].astype(int) + 1
+        spots_df["centrosome_id"] = linked["particle"].astype(int) + 1
         return spots_df
 
     def _bind_tracks_to_hints(self, tracked) -> dict:
-        bindings = {} # centrosome_id -> [centriole_id1, centriole_id2]
+        bindings = {} # pair_id -> [centrosome_id1, centrosome_id2]
         binding_dist = self.get_max_binding_distance_pxl()
-        used_centrioles = set()
+        used_centrosomes = set()
         tracks_span = {
-            centriole_id: group["T"].max() - group["T"].min() 
-            for centriole_id, group in tracked.groupby("centriole_id")
+            centrosome_id: group["T"].max() - group["T"].min() 
+            for centrosome_id, group in tracked.groupby("centrosome_id")
         }
         print("Tracks span (in frames):")
         pprint(tracks_span)
 
-        for centrosome_id, hint_info in self.hints.items():
-            bindings[centrosome_id] = [None, None]
+        for pair_id, hint_info in self.hints.items():
+            bindings[pair_id] = [None, None]
             start_frame = hint_info["start"]
             end_frame = hint_info["end"]
             hint_points = hint_info["points"]
             candidates = tracked[tracked["T"] == start_frame]
             
             for i, hint_point in enumerate(hint_points):
-                # sorted tuples: (distance, centriole_id) for the starting frame
+                # sorted tuples: (distance, centrosome_id) for the starting frame
                 sorted_points = sorted([
-                    (np.linalg.norm(c[["Y", "X"]].values - hint_point), c['centriole_id']) 
+                    (np.linalg.norm(c[["Y", "X"]].values - hint_point), c['centrosome_id']) 
                     for _, c in candidates.iterrows()
                 ], key=lambda x: x[0])
                 # filter: remove already used; remove too far away
                 sorted_points = [
                     (dist, cid) 
                     for dist, cid in sorted_points 
-                    if cid not in used_centrioles and dist <= binding_dist
+                    if cid not in used_centrosomes and dist <= binding_dist
                 ]
-                # candidate centriole id
+                # candidate centrosome id
                 best_candidate = None
                 # desired length of the track for this hint
                 current_hint_duration = end_frame - start_frame
                 
-                for _, centriole_id in sorted_points:
-                    if tracks_span[centriole_id] >= current_hint_duration:
-                        best_candidate = centriole_id
+                for _, centrosome_id in sorted_points:
+                    if tracks_span[centrosome_id] >= current_hint_duration:
+                        best_candidate = centrosome_id
                         break
 
                 if best_candidate is not None:
-                    used_centrioles.add(best_candidate)
+                    used_centrosomes.add(best_candidate)
 
-                bindings[centrosome_id][i] = best_candidate
+                bindings[pair_id][i] = best_candidate
                 
         return bindings
 
-    def _find_centrosomes(self, tracked) -> pd.DataFrame:
+    def _find_pairs(self, tracked) -> pd.DataFrame:
         bindings = self._bind_tracks_to_hints(tracked)
         tracked = tracked.copy()
-        tracked["centrosome_id"] = 0
+        tracked["pair_id"] = 0
 
-        for centrosome_id, centriole_ids in bindings.items():
-            t1, t2 = centriole_ids
+        for pair_id, centrosome_ids in bindings.items():
+            t1, t2 = centrosome_ids
             if t1 is None or t2 is None:
                 raise ValueError(
-                    f"Failed to bind centrosomes to hints for centrosome {centrosome_id}."
+                    f"Failed to bind pairs to hints for pair {pair_id}."
                 )
-            tracked.loc[tracked["centriole_id"] == t1, "centrosome_id"] = (
-                centrosome_id
+            tracked.loc[tracked["centrosome_id"] == t1, "pair_id"] = (
+                pair_id
             )
-            tracked.loc[tracked["centriole_id"] == t2, "centrosome_id"] = (
-                centrosome_id
+            tracked.loc[tracked["centrosome_id"] == t2, "pair_id"] = (
+                pair_id
             )
             
 
-        tracked = tracked[tracked["centrosome_id"] != 0]
+        tracked = tracked[tracked["pair_id"] != 0]
         return tracked
 
     def _interpolate_missing_time_points(self, tracked) -> pd.DataFrame:
@@ -268,21 +268,21 @@ class FindCentrosomesOperator:
         The nex coordinates are interpolated linearly between the two closest known points.
         """
         complete_tracks = []
-        for centriole_id, group in tracked.groupby("centriole_id"):
+        for centrosome_id, group in tracked.groupby("centrosome_id"):
             minT = group["T"].min()
             maxT = group["T"].max()
             group = group.set_index("T").reindex(range(minT, maxT + 1))
-            group["centriole_id"] = centriole_id
+            group["centrosome_id"] = centrosome_id
             group[["Y", "X"]] = group[["Y", "X"]].interpolate(method="linear")
-            group["centrosome_id"] = group["centrosome_id"].ffill().bfill()
+            group["pair_id"] = group["pair_id"].ffill().bfill()
             complete_tracks.append(group.reset_index())
         df = pd.concat(complete_tracks, ignore_index=True)
-        for centrosome_id, hint_info in self.hints.items():
+        for pair_id, hint_info in self.hints.items():
             start_frame = hint_info["start"]
             end_frame = hint_info["end"]
             df = df[
                 ~(
-                    (df["centrosome_id"] == centrosome_id)
+                    (df["pair_id"] == pair_id)
                     & ((df["T"] < start_frame) | (df["T"] > end_frame))
                 )
             ]
@@ -298,37 +298,37 @@ class FindCentrosomesOperator:
         maximas = self._find_maximas(preprocessed)
 
         tracked = self._track_spots(maximas)
-        tracked = self._find_centrosomes(tracked)
+        tracked = self._find_pairs(tracked)
         tracked = self._interpolate_missing_time_points(tracked)
 
-        self.centrosomes = tracked.sort_values(
-            by=["centrosome_id", "centriole_id", "T"]
+        self.pairs = tracked.sort_values(
+            by=["pair_id", "centrosome_id", "T"]
         ).reset_index(drop=True)
 
     @staticmethod
     def as_lines(
-        centrosomes_df: pd.DataFrame, track_colors: dict
+        pairs_df: pd.DataFrame, track_colors: dict
     ) -> tuple[list, list, list]:
         lines = []
         colors = []
-        centrosome_ids = []
-        for centrosome_id, group in centrosomes_df.groupby("centrosome_id"):
-            centriole_ids = group["centriole_id"].unique()
+        pair_ids = []
+        for pair_id, group in pairs_df.groupby("pair_id"):
+            centrosome_ids = group["centrosome_id"].unique()
             components = []
-            for centriole_id in centriole_ids:
-                centriole_points = group[group["centriole_id"] == centriole_id][
+            for centrosome_id in centrosome_ids:
+                centrosome_points = group[group["centrosome_id"] == centrosome_id][
                     ["T", "Y", "X"]
                 ]
-                centriole_points = centriole_points.sort_values(by="T")
-                centriole_points = centriole_points.values
-                components.append(centriole_points)
+                centrosome_points = centrosome_points.sort_values(by="T")
+                centrosome_points = centrosome_points.values
+                components.append(centrosome_points)
             points = np.stack(components, axis=1)
             lines.append([p for p in points])
             colors.append(
-                [track_colors.get(centrosome_id, "#ffffff") for _ in range(len(points))]
+                [track_colors.get(pair_id, "#ffffff") for _ in range(len(points))]
             )
-            centrosome_ids.append(centrosome_id)
-        return centrosome_ids, lines, colors
+            pair_ids.append(pair_id)
+        return pair_ids, lines, colors
 
 
 def launch_full_process():
@@ -351,19 +351,19 @@ def launch_full_process():
         2: {"start": 17, "end": 463, "points": np.array([[248, 477], [237, 514]])},
     }
 
-    operator = FindCentrosomesOperator()
+    operator = FindPairsOperator()
     operator.set_input_image(img, calib, units)
     operator.set_hints(hints)
     operator.set_prominence(10.0)
     operator.run()
 
-    centrosomes = operator.get_centrosomes()
-    centrosomes.to_csv(DUMP / "centrosome_points_track.csv", index=False)
+    pairs = operator.get_pairs()
+    pairs.to_csv(DUMP / "pair_points_track.csv", index=False)
 
     viewer = napari.Viewer()
     viewer.add_image(img, name="raw")
     viewer.add_points(
-        centrosomes[["T", "Y", "X"]].values,
+        pairs[["T", "Y", "X"]].values,
         name="maximas",
         size=7,
         face_color="transparent",
@@ -372,9 +372,9 @@ def launch_full_process():
         visible=True,
     )
     viewer.add_tracks(
-        centrosomes[["centriole_id", "T", "Y", "X"]].values,
+        pairs[["centrosome_id", "T", "Y", "X"]].values,
         name="tracks",
-        features=centrosomes,
+        features=pairs,
     )
     napari.run()
 

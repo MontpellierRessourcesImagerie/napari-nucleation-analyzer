@@ -34,7 +34,7 @@ Example:
 - If you wish to go with this option, you need to have :code:`git` installed on your system. 
   If you don't have it, you can download it from https://git-scm.com/downloads. To check if you have it, 
   run the command :code:`git --version` in any terminal.
-- In your terminal with the environment activated, run the command :code:`pip install git+https://github.com/MontpellierRessourcesImagerie/napari-nucleation-analyzer.git`
+- In your terminal with the environment activated, run the command :code:`pip install -e git+https://github.com/MontpellierRessourcesImagerie/napari-nucleation-analyzer.git`
 
 3. Install the stable version from PyPI
 =======================================

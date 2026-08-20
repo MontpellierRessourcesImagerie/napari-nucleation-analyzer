@@ -14,22 +14,22 @@ class MakeKymographOperator:
     """
     def __init__(self):
         self.arcs        = None
-        self.centrosomes = None
+        self.pairs = None
         self.input_image = None
 
         self.kymographs  = {}
 
     def set_arcs(self, arcs: dict):
-        for centriole_id, arc in arcs.items():
+        for centrosome_id, arc in arcs.items():
             if arc.ndim != 3 or arc.shape[2] != 3:
-                raise ValueError(f"Arc for centriole {centriole_id} must have shape (N, 3).")
+                raise ValueError(f"Arc for centrosome {centrosome_id} must have shape (N, 3).")
         self.arcs = arcs
 
-    def set_centrosomes(self, centrosomes: pd.DataFrame):
-        required_columns = {"centriole_id", "T", "Y", "X", "centrosome_id"}
-        if not required_columns.issubset(centrosomes.columns):
-            raise ValueError(f"Centrosomes dataframe must contain columns: {required_columns}")
-        self.centrosomes = centrosomes
+    def set_pairs(self, pairs: pd.DataFrame):
+        required_columns = {"centrosome_id", "T", "Y", "X", "pair_id"}
+        if not required_columns.issubset(pairs.columns):
+            raise ValueError(f"Pairs dataframe must contain columns: {required_columns}")
+        self.pairs = pairs
 
     def set_input_image(self, image_arr: np.ndarray, calibration: dict, units: dict):
         if image_arr.ndim != 3:
@@ -71,13 +71,13 @@ class MakeKymographOperator:
         with ThreadPoolExecutor() as executor:
             executor.map(median_t, range(intensities.shape[0]))
 
-        for centriole_id in arcs.keys():
-            arc = arcs[centriole_id]
-            centriole = tracked_points[tracked_points["centriole_id"] == centriole_id].sort_values("T")[img_axes].values
+        for centrosome_id in arcs.keys():
+            arc = arcs[centrosome_id]
+            centrosome = tracked_points[tracked_points["centrosome_id"] == centrosome_id].sort_values("T")[img_axes].values
 
             # Arc: (T, num_points, 3)
-            # Centriole: (T, 3)
-            dir_vector = arc - centriole[:, np.newaxis, :] # new axis for broadcasting, shape: (T, num_points, 3)
+            # Centrosome: (T, 3)
+            dir_vector = arc - centrosome[:, np.newaxis, :] # new axis for broadcasting, shape: (T, num_points, 3)
             dir_vector /= np.linalg.norm(dir_vector, axis=2, keepdims=True)
 
             coefs = np.array([-1.0, -0.5, 0.0, 0.5, 1.0])
@@ -92,16 +92,16 @@ class MakeKymographOperator:
             pxl_values = values.reshape(*original_shape[:-1]) # shape: (T, num_coefs, num_points)
 
             kymograph = np.mean(pxl_values, axis=1)
-            kymographs[centriole_id] = kymograph
+            kymographs[centrosome_id] = kymograph
 
         return kymographs
 
     def run(self):
-        if (self.arcs is None) or (self.centrosomes is None) or (self.input_image is None):
-            raise ValueError("Arcs, centrosomes, and input image must be set before running the operator.")
+        if (self.arcs is None) or (self.pairs is None) or (self.input_image is None):
+            raise ValueError("Arcs, pairs, and input image must be set before running the operator.")
         
         self.kymographs = self._make_kymograph(
-            self.centrosomes, 
+            self.pairs, 
             self.arcs, 
             self.input_image
         )
@@ -120,26 +120,26 @@ if __name__ == "__main__":
     calib = {'T': 1, 'Y': 0.1083333, 'X': 0.1083333}
     units = {'T': 's', 'Y': 'um', 'X': 'um'}
 
-    # Retrieving the centrosomes dataframe
+    # Retrieving the pairs dataframe
     centros_folder = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump")
-    centro_path = centros_folder / "centrosomes_arcs.csv"
-    centrosomes = pd.read_csv(centro_path)
+    centro_path = centros_folder / "pairs_arcs.csv"
+    pairs = pd.read_csv(centro_path)
 
     # Retrieving the processed arcs
     arcs = {}
     arcs_folder = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump")
-    for centriole_id in centrosomes["centriole_id"].unique():
-        arc_path = arcs_folder / f"arc_{centriole_id}.npy"
+    for centrosome_id in pairs["centrosome_id"].unique():
+        arc_path = arcs_folder / f"arc_{centrosome_id}.npy"
         if arc_path.exists():
-            arcs[centriole_id] = np.load(arc_path)
+            arcs[centrosome_id] = np.load(arc_path)
         else:
-            print(f"Warning: Arc file for centriole {centriole_id} not found at {arc_path}")
+            print(f"Warning: Arc file for centrosome {centrosome_id} not found at {arc_path}")
 
     # Running the operator to generate kymographs
     op = MakeKymographOperator()
     op.set_input_image(image, calib, units)
     op.set_arcs(arcs)
-    op.set_centrosomes(centrosomes)
+    op.set_pairs(pairs)
     op.run()
 
     # Saving the kymographs to disk
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     out_folder = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump/kymos")
     out_folder.mkdir(exist_ok=True)
 
-    for centriole_id, kymo in kymos.items():
-        out_path = out_folder / f"kymo_{centriole_id}.tif"
-        print(centriole_id, kymo.shape, out_path)
+    for centrosome_id, kymo in kymos.items():
+        out_path = out_folder / f"kymo_{centrosome_id}.tif"
+        print(centrosome_id, kymo.shape, out_path)
         tiff.imwrite(out_path, kymo.astype(np.float32))

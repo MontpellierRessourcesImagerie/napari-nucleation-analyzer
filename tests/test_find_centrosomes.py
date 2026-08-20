@@ -7,7 +7,7 @@ import tifffile as tiff
 
 TESTING_IMAGE_URL = "https://sdrive.cnrs.fr/s/oK2erWnk6xM9dzb/download"
 
-from napari_nucleation_analyzer.operators.find_centrosomes_operator import FindCentrosomesOperator
+from napari_nucleation_analyzer.operators.find_pairs_operator import FindPairsOperator
 
 
 # ----------------------------------------------------------------------
@@ -16,7 +16,7 @@ from napari_nucleation_analyzer.operators.find_centrosomes_operator import FindC
 
 @pytest.fixture
 def operator():
-    return FindCentrosomesOperator()
+    return FindPairsOperator()
 
 
 @pytest.fixture
@@ -41,13 +41,13 @@ def calibrated_operator(operator, calibration, units):
 # ----------------------------------------------------------------------
 
 def test_default_values(operator):
-    assert operator.prominence == FindCentrosomesOperator.default_prominence()
-    assert operator.searching_range == FindCentrosomesOperator.default_searching_range()
-    assert operator.memory == FindCentrosomesOperator.default_memory()
-    assert operator.max_binding_distance == FindCentrosomesOperator.default_max_binding_distance()
+    assert operator.prominence == FindPairsOperator.default_prominence()
+    assert operator.searching_range == FindPairsOperator.default_searching_range()
+    assert operator.memory == FindPairsOperator.default_memory()
+    assert operator.max_binding_distance == FindPairsOperator.default_max_binding_distance()
     assert operator.input_image is None
     assert operator.hints == {}
-    assert operator.centrosomes is None
+    assert operator.pairs is None
 
 
 # ----------------------------------------------------------------------
@@ -204,7 +204,7 @@ class TestBindTracksToHints:
     def _make_operator_with_unit_scale(self):
         # calibration X=1.0 => distance en pixel == distance physique,
         # plus simple à raisonner dans les tests
-        op = FindCentrosomesOperator()
+        op = FindPairsOperator()
         img = np.zeros((10, 100, 100), dtype=np.float32)
         op.set_input_image(img, {"T": 1.0, "Y": 1.0, "X": 1.0}, {"T": "s", "Y": "px", "X": "px"})
         op.set_max_binding_distance(5.0)
@@ -219,10 +219,10 @@ class TestBindTracksToHints:
             "T": [0, 0, 0],
             "Y": [10.5, 50.0, 11.0],
             "X": [10.5, 50.0, 11.0],
-            "centriole_id": [1, 2, 3],
+            "centrosome_id": [1, 2, 3],
         })
         bindings = op._bind_tracks_to_hints(tracked)
-        # le centriole 1 (distance ~0.7) doit être choisi plutôt que le 3 (distance ~1.4)
+        # le centrosome 1 (distance ~0.7) doit être choisi plutôt que le 3 (distance ~1.4)
         assert bindings[1][0] == 1
 
     def test_no_candidate_within_distance_gives_none(self):
@@ -234,7 +234,7 @@ class TestBindTracksToHints:
             "T": [0],
             "Y": [90.0],
             "X": [90.0],
-            "centriole_id": [1],
+            "centrosome_id": [1],
         })
         bindings = op._bind_tracks_to_hints(tracked)
         assert bindings[1][0] is None
@@ -256,7 +256,7 @@ class TestFilterByHintPoints:
             "T": [0],
             "Y": [1.0],
             "X": [1.0],
-            "centriole_id": [1],
+            "centrosome_id": [1],
         })
         with pytest.raises(ValueError, match="Failed to bind"):
             calibrated_operator._filter_by_hint_points(tracked)
@@ -270,11 +270,11 @@ class TestFilterByHintPoints:
             "T": [0, 0, 0],
             "Y": [1.0, 50.0, 99.0],
             "X": [1.0, 50.0, 99.0],
-            "centriole_id": [1, 2, 3],
+            "centrosome_id": [1, 2, 3],
         })
         result = calibrated_operator._filter_by_hint_points(tracked)
-        assert set(result["centriole_id"]) == {1, 2}
-        assert set(result["centrosome_id"]) == {1}
+        assert set(result["centrosome_id"]) == {1, 2}
+        assert set(result["pair_id"]) == {1}
 
 
 # ----------------------------------------------------------------------
@@ -291,8 +291,8 @@ class TestInterpolateMissingTimePoints:
             "T": [0, 2, 4],
             "Y": [0.0, 2.0, 4.0],
             "X": [0.0, 20.0, 40.0],
-            "centriole_id": [1, 1, 1],
             "centrosome_id": [1, 1, 1],
+            "pair_id": [1, 1, 1],
         })
         result = calibrated_operator._interpolate_missing_time_points(tracked)
         result = result.sort_values("T").reset_index(drop=True)
@@ -310,8 +310,8 @@ class TestInterpolateMissingTimePoints:
             "T": [0, 1, 2, 3, 4],
             "Y": [0.0, 1.0, 2.0, 3.0, 4.0],
             "X": [0.0, 1.0, 2.0, 3.0, 4.0],
-            "centriole_id": [1, 1, 1, 1, 1],
             "centrosome_id": [1, 1, 1, 1, 1],
+            "pair_id": [1, 1, 1, 1, 1],
         })
         result = calibrated_operator._interpolate_missing_time_points(tracked)
         assert set(result["T"]) == {1, 2, 3}
@@ -328,21 +328,21 @@ class TestAsLines:
             "T": [0, 1, 0, 1, 0, 1],
             "Y": [0, 1, 10, 11, 0, 1],
             "X": [0, 1, 10, 11, 5, 6],
-            "centriole_id": [1, 1, 2, 2, 3, 3],
-            "centrosome_id": [10, 10, 10, 10, 20, 20],
+            "centrosome_id": [1, 1, 2, 2, 3, 3],
+            "pair_id": [10, 10, 10, 10, 20, 20],
         })
-        centrosome_ids, lines, colors = FindCentrosomesOperator.as_lines(df, track_colors={10: "#ff0000"})
+        pair_ids, lines, colors = FindPairsOperator.as_lines(df, track_colors={10: "#ff0000"})
 
-        assert set(centrosome_ids) == {10, 20}
+        assert set(pair_ids) == {10, 20}
 
-        idx_10 = centrosome_ids.index(10)
-        idx_20 = centrosome_ids.index(20)
+        idx_10 = pair_ids.index(10)
+        idx_20 = pair_ids.index(20)
 
-        # centrosome 10 a 2 centrioles -> 2 composantes par point temporel
+        # pair 10 a 2 centrosomes -> 2 composantes par point temporel
         assert lines[idx_10][0].shape == (2, 3)
         assert all(c == "#ff0000" for c in colors[idx_10])
 
-        # centrosome 20 n'a pas de couleur définie -> fallback blanc
+        # pair 20 n'a pas de couleur définie -> fallback blanc
         assert all(c == "#ffffff" for c in colors[idx_20])
 
 
@@ -381,7 +381,7 @@ class TestRunIntegration:
         """
         img = self.get_testing_image()
 
-        op = FindCentrosomesOperator()
+        op = FindPairsOperator()
         op.set_input_image(
             img,
             calibration={"T": 1.0, "Y": 0.103, "X": 0.103},
@@ -394,8 +394,8 @@ class TestRunIntegration:
         })
 
         op.run()
-        result = op.get_centrosomes()
+        result = op.get_pairs()
 
         assert not result.empty
-        assert set(result.columns) == {"centriole_id", "T", "Y", "X", "centrosome_id"}
-        assert set(result["centrosome_id"]) == {1}
+        assert set(result.columns) == {"centrosome_id", "T", "Y", "X", "pair_id"}
+        assert set(result["pair_id"]) == {1}

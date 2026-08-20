@@ -1,6 +1,6 @@
-==================================================
-Detect and track centrioles to rebuild centrosomes
-==================================================
+==========================================
+Detect and track centrosomes to form pairs
+==========================================
 
 1. Setup your workspace
 =======================
@@ -19,7 +19,7 @@ a. Open an image
 b. Calibrate your image
 -----------------------
 
-- In the top-bar menu of Napari, go for the "Set Scale" tool in the "Calibration Tool" plugin.
+- In the top-bar menu of Napari, go for "Plugins" > "Calibration Tool" > "Scale Tool".
 - It should open a new widget in the right panel of Napari.
 - You will be asked the physical size of your pixels on the X, Y and Z axes. You can provide 
   the actual size for the X and Y axes (ex: 0.103) but you should set the Z axis to 1 (since 
@@ -34,33 +34,34 @@ b. Calibrate your image
 2. Provide hints for the centrosomes
 ====================================
 
-- At this point, you can open the "Nucleation analyzer" plugin in the top-bar menu of Napari. 
+- At this point, you can open the "Nucleation analyzer" plugin from the top-bar menu of Napari. 
   It should open a new widget in the right panel of Napari.
 - A hint consists in:
 
-    - a hand-drawn line between two centrioles to indicate that they belong to the same centrosome
-    - the time point at which we should start analyzing this centrosome
-    - the time point at which we should stop analyzing this centrosome
+    - a hand-drawn line between two centrosomes to indicate that they belong to the same pair
+    - the time point at which we should start analyzing these centrosomes
+    - the time point at which we should stop analyzing these centrosomes
 
-- Here is the sequence of actions to do to give a hint for a centrosome:
+- Here is the sequence of actions to do to give a hint for a pair of centrosomes:
 
-    1. Identify the first centrosome that you want to study and navigate to the first time point at which
-       you want to study it. Zoom on it using the mouse wheel and pan using the left mouse button.
-    2. In the "Centrosome tracks" sub-section of the widget, click on the "Add centrosome" button. 
+    1. Identify the first pair that you want to study and navigate to the first time point at which
+       you want to study it. Zoom on it using the mouse wheel and move (panning) using the left mouse button.
+    2. In the "Pair tracks" sub-section of the widget, click on the "Add pair" button. 
        A new row should appear with its own color and two buttons to set the start and stop time points.
-    3. In the list of layers, a new layer named "_Centrosome XX" should have appeared and be selected.
+    3. In the list of layers, a new layer named "_Pair XX" should have appeared and be selected.
        In the upper-left region of Napari's window, make sure the the |move| "Move" button is selected.
        While it is selected, you can still navigate in the viewer.
     4. Activate the |line| "Line" tool still in the upper-left region of Napari's window. 
-       You can now draw a line going from one centriole to the other of the same centrosome.
+       You can now draw a line going from one centrosome to the other of the same pair.
+       You have to hold the left mouse button down to draw the line.
        For safety reasons, you should go back to the |move| "Move" tool after drawing the line 
        to avoid accidentally drawing another one. If you need to adjust the line, you have to
        use the |move_verts| "Move vertices" tool.
-    5. Get back in the "Centrosome tracks" sub-section and click on the "Start" button. It will
-       set the start time point of this centrosome to the current time point.
-    6. Navigate to the last time point at which you want to study this centrosome. The line that you
+    5. Get back in the "Pair tracks" sub-section and click on the "Start" button. It will
+       set the start time point of this pair of centrosomes to the current time point.
+    6. Navigate to the last time point at which you want to study this pair. The line that you
        drew won't follow, it is normal. Click on the "End" button to set the stop time point of 
-       this centrosome to the current time point.
+       this pair to the current time point.
 
 .. tabs::
 
@@ -99,58 +100,65 @@ b. Calibrate your image
       |   :align: center                                   |
       +----------------------------------------------------+
 
+   .. tab:: Step 6
+
+      +----------------------------------------------------+
+      | .. image:: _images/def_centro/06-centro.png        |
+      |   :align: center                                   |
+      +----------------------------------------------------+
+
 3. Tune the settings
 ====================
 
-+-----------------------+--------------------------------------------------------------------+------------+
-| Name                  | Description                                                        | Default    |
-+=======================+====================================================================+============+
-| Image                 | This dropdown menu allows you to select the image you want to      |            |
-|                       | analyze. This is simply the list of image layers currently open in |            |
-|                       | Napari.                                                            |            |
-+-----------------------+--------------------------------------------------------------------+------------+
-| Prominence            | This value must be strictly positive. It is a factor that          | ×10.0      |
-|                       | represents how much a local maximum on the preprocessed image must |            |
-|                       | be above the filtered image's standard deviation to be considered  |            |
-|                       | as a centriole. A local maximum on the preprocessed image must be  |            |
-|                       | above its most shallow local minimum to be considered as a         |            |
-|                       | centriole. The higher this value, the less centrioles will be      |            |
-|                       | detected. More detailed explanation are available in               |            |
-|                       | :doc:`workflow`                                                    |            |
-+-----------------------+--------------------------------------------------------------------+------------+
-| Searching range       | In the tracking process, how much a centriole is allowed to move   | 3.25 µm    |
-|                       | between two consecutive time points. The higher this value, the    |            |
-|                       | more centrioles will be tracked but the more likely it is to make  |            |
-|                       | mistakes.                                                          |            |
-+-----------------------+--------------------------------------------------------------------+------------+
-| Memory                | In the tracking process, how many frames a centriole is allowed to | 10 f       |
-|                       | disappear for and still be linked to a trajectory. The higher this |            |
-|                       | value, the more robust the tracking will be, but the more likely   |            |
-|                       | it is to make mistakes. This is useful when some centrioles move   |            |
-|                       | on another Z.                                                      |            |
-+-----------------------+--------------------------------------------------------------------+------------+
-| Max binding distance  | When the actual detected centrioles have to be linked to your      | 0.6 µm     |
-|                       | manually drawn hints, this value is the maximum distance allowed   |            |
-|                       | between a detected centriole and a hint. If a detected centriole   |            |
-|                       | is further than this distance from a hint, it won't be linked to   |            |
-|                       | it.                                                                |            |
-+-----------------------+--------------------------------------------------------------------+------------+
++-----------------------+---------------------------------------------------------------------+------------+
+| Name                  | Description                                                         | Default    |
++=======================+=====================================================================+============+
+| Image                 | This dropdown menu allows you to select the image you want to       |            |
+|                       | analyze. This is simply the list of image layers currently open in  |            |
+|                       | Napari.                                                             |            |
++-----------------------+---------------------------------------------------------------------+------------+
+| Prominence            | This value must be strictly positive. It is a factor that           | ×10.0      |
+|                       | represents how much a local maximum on the preprocessed image must  |            |
+|                       | be above the filtered image's standard deviation to be considered   |            |
+|                       | as a centrosome. A local maximum on the preprocessed image must be  |            |
+|                       | above its most shallow local minimum to be considered as a          |            |
+|                       | centrosome. The higher this value, the less centrosomes will be     |            |
+|                       | detected. More detailed explanation are available in                |            |
+|                       | :doc:`workflow`                                                     |            |
++-----------------------+---------------------------------------------------------------------+------------+
+| Searching range       | In the tracking process, how much a centrosome is allowed to move   | 3.25 µm    |
+|                       | between two consecutive time points. The higher this value, the     |            |
+|                       | more centrosomes will be tracked but the more likely it is to make  |            |
+|                       | mistakes.                                                           |            |
++-----------------------+---------------------------------------------------------------------+------------+
+| Memory                | In the tracking process, how many frames a centrosome is allowed to | 10 f       |
+|                       | disappear for and still be linked to a trajectory. The higher this  |            |
+|                       | value, the more robust the tracking will be, but the more likely    |            |
+|                       | it is to make mistakes. This is useful when some centrosomes move   |            |
+|                       | on another Z.                                                       |            |
++-----------------------+---------------------------------------------------------------------+------------+
+| Max binding distance  | When the actual detected centrosomes have to be linked to your      | 0.6 µm     |
+|                       | manually drawn hints, this value is the maximum distance allowed    |            |
+|                       | between a detected centrosome and a hint. If a detected centrosome  |            |
+|                       | is further than this distance from a hint, it won't be linked to    |            |
+|                       | it.                                                                 |            |
++-----------------------+---------------------------------------------------------------------+------------+
 
 4. Launch the calculation
 =========================
 
-You can now click on the "Find centrosomes" button to launch the calculation. This is a heavy
+You can now click on the "Find pairs" button to launch the calculation. This is a heavy
 process, it can take a minute or two depending on the size of your image. It performs the detection, 
-the tracking and the linking of the centrioles in one go.
+the tracking and the linking of the centrosomes in one go.
 
 At the end of the calculation, if you navigate through the time points of your image, you should see 
-the detected and tracked centrioles and the link between them to form centrosomes.
+the detected and tracked centrosomes and the link between them to form a pair.
 
 .. figure:: _images/tracked.gif
   :align: center
   :width: 60%
 
-  After the operation, the line points from one centriole to the other of the same centrosome 
+  After the operation, the line points from one centrosome to the other of the same pair 
   at all time points.
 
 

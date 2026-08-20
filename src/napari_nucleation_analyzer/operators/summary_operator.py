@@ -7,7 +7,7 @@ class SummaryOperator:
         self.kymographs  = None
         self.summary     = None
         self.spots       = None
-        self.centrosomes = None
+        self.pairs = None
 
     def set_kymographs(self, kymographs):
         self.kymographs = kymographs
@@ -15,16 +15,16 @@ class SummaryOperator:
     def set_spots(self, spots):
         self.spots = spots
 
-    def set_centrosomes(self, centrosomes):
-        required_columns = {"centriole_id", "T", "Y", "X", "centrosome_id"}
-        if not required_columns.issubset(centrosomes.columns):
-            raise ValueError(f"Centrosomes dataframe must contain columns: {required_columns}")
-        self.centrosomes = centrosomes
+    def set_pairs(self, pairs):
+        required_columns = {"centrosome_id", "T", "Y", "X", "pair_id"}
+        if not required_columns.issubset(pairs.columns):
+            raise ValueError(f"Pairs dataframe must contain columns: {required_columns}")
+        self.pairs = pairs
 
-    def get_centrosomes(self) -> pd.DataFrame:
-        if self.centrosomes is None:
-            raise ValueError("Centrosomes dataframe has not been set.")
-        return self.centrosomes
+    def get_pairs(self) -> pd.DataFrame:
+        if self.pairs is None:
+            raise ValueError("Pairs dataframe has not been set.")
+        return self.pairs
 
     def _build_summary(self, all_kymographs, all_spots):
         """
@@ -32,16 +32,16 @@ class SummaryOperator:
         Time is the vertical axis.
         """
         blocks = []
-        centrosomes = self.get_centrosomes()
-        pairs = self._build_pairs(centrosomes)
+        pairs = self.get_pairs()
+        matchs = self._build_matchs(pairs)
 
-        for centriole_id, kymo in all_kymographs.items():
-            t_start = centrosomes[centrosomes['centriole_id'] == centriole_id]['T'].min()
-            spots = all_spots[centriole_id]
+        for centrosome_id, kymo in all_kymographs.items():
+            t_start = pairs[pairs['centrosome_id'] == centrosome_id]['T'].min()
+            spots = all_spots[centrosome_id]
             canvas = np.zeros_like(kymo, dtype=np.uint8)
             canvas[spots[:, 0], spots[:, 1]] = 1
             counts = np.sum(canvas, axis=1)
-            identifier = f"C{int(pairs[centriole_id])} → c{int(centriole_id)}"
+            identifier = f"P{int(matchs[centrosome_id])} → c{int(centrosome_id)}"
 
             block = pd.DataFrame({
                 f"Count [{identifier}]": counts,
@@ -51,17 +51,17 @@ class SummaryOperator:
 
         return pd.concat(blocks, axis=1)
 
-    def _build_pairs(self, centrosomes_df):
-        unique_centrioles = centrosomes_df['centriole_id'].unique()
-        pairs = {}
-        for centriole_id in unique_centrioles:
-            centriole_data = centrosomes_df[centrosomes_df['centriole_id'] == centriole_id]
-            unique_centrosomes = centriole_data['centrosome_id'].unique()
-            centrosomes = unique_centrosomes.tolist()
-            if len(centrosomes) != 1:
-                raise ValueError(f"Centriole {centriole_id} has multiple centrosomes: {centrosomes}")
-            pairs[centriole_id] = centrosomes[0]
-        return pairs
+    def _build_matchs(self, pairs_df):
+        unique_centrosomes = pairs_df['centrosome_id'].unique()
+        matchs = {}
+        for centrosome_id in unique_centrosomes:
+            centrosome_data = pairs_df[pairs_df['centrosome_id'] == centrosome_id]
+            unique_pairs = centrosome_data['pair_id'].unique()
+            pairs = unique_pairs.tolist()
+            if len(pairs) != 1:
+                raise ValueError(f"Centrosome {centrosome_id} has multiple pairs: {pairs}")
+            matchs[centrosome_id] = pairs[0]
+        return matchs
     
     def get_summary(self):
         if self.summary is None:
@@ -98,15 +98,15 @@ if __name__ == "__main__":
     print("Loaded kymographs:", list(kymographs.keys()))
     print("Loaded spots:", list(spots.keys()))
 
-    # Loading the centrosomes dataframe
-    centrosomes_path = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump/centrosomes_arcs.csv")
-    centrosomes = pd.read_csv(centrosomes_path)
+    # Loading the pairs dataframe
+    pairs_path = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump/pairs_arcs.csv")
+    pairs = pd.read_csv(pairs_path)
 
     # Running the summary operator
     summary_operator = SummaryOperator()
     summary_operator.set_kymographs(kymographs)
     summary_operator.set_spots(spots)
-    summary_operator.set_centrosomes(centrosomes)
+    summary_operator.set_pairs(pairs)
     summary_operator.run()
 
     summary_df = summary_operator.get_summary()

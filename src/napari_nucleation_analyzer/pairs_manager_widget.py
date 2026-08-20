@@ -18,8 +18,8 @@ import numpy as np
 
 
 @dataclass
-class _TrackRow:
-    """Internal bookkeeping for a single track row's widgets."""
+class _PairRow:
+    """Internal bookkeeping for a single pair row's widgets."""
 
     color        : str
     index        : int
@@ -32,17 +32,17 @@ class _TrackRow:
     frame_end    : int | None = None
 
 
-class TracksManagerWidget(QWidget):
-    """Widget managing a dynamic table of track rows plus an "Add track" button."""
+class PairsManagerWidget(QWidget):
+    """Widget managing a dynamic table of pair rows plus an "Add pair" button."""
 
-    trackStartRequested  = Signal(int)
-    trackEndRequested    = Signal(int)
-    trackDeleteRequested = Signal(int)
+    pairStartRequested  = Signal(int)
+    pairEndRequested    = Signal(int)
+    pairDeleteRequested = Signal(int)
 
     INDEX_PADDING       = 2
     ACTION_BUTTON_WIDTH = 110
     DELETE_BUTTON_WIDTH = 28
-    PREFIX              = "_Centrosome "
+    PREFIX              = "_Pair "
     PALETTE             = [
         "#e01010",
         "#ff7f0e",
@@ -61,7 +61,7 @@ class TracksManagerWidget(QWidget):
         self.viewer = viewer
         self.parent = parent
         self._next_index: int = 1
-        self._rows: dict[int, _TrackRow] = {}
+        self._rows: dict[int, _PairRow] = {}
         self.create_ui()
 
     def create_ui(self):
@@ -72,8 +72,8 @@ class TracksManagerWidget(QWidget):
         self._rows_layout.setSpacing(5)
         self._main_layout.addWidget(self._rows_container)
 
-        self._add_button = QPushButton("Add centrosome", self)
-        self._add_button.clicked.connect(self._on_add_track_clicked)
+        self._add_button = QPushButton("Add pair", self)
+        self._add_button.clicked.connect(self._on_add_pair_clicked)
 
         self.clear_all_button = QPushButton("Clear all", self)
         self.clear_all_button.clicked.connect(self.clear_all)
@@ -85,8 +85,8 @@ class TracksManagerWidget(QWidget):
 
         self._main_layout.addLayout(h_layout)
 
-    def add_track(self, line=None) -> int:
-        """Add a new track row. Returns the index assigned to the new track."""
+    def add_pair(self, line=None) -> int:
+        """Add a new pair row. Returns the index assigned to the new pair."""
         index = self._next_index
         self._next_index += 1
 
@@ -94,14 +94,14 @@ class TracksManagerWidget(QWidget):
         self._rows[index] = row
         self._rows_layout.addWidget(row.container)
 
-        self._add_track_layer(index, line)
+        self._add_pair_layer(index, line)
 
         return index
 
-    def insert_track(self, index: int, line: list, f_start: int, f_end: int):
-        """Insert a track row with a specific index, line, start/end frames, and color."""
+    def insert_pair(self, index: int, line: list, f_start: int, f_end: int):
+        """Insert a pair row with a specific index, line, start/end frames, and color."""
         if index in self._rows:
-            raise ValueError(f"Track with index {index} already exists.")
+            raise ValueError(f"Pair with index {index} already exists.")
 
         self._next_index = max(self._next_index, index + 1)
         row = self._build_row(index)
@@ -109,18 +109,18 @@ class TracksManagerWidget(QWidget):
         self._rows[index] = row
         self._rows_layout.addWidget(row.container)
 
-        self._add_track_layer(index, line)
+        self._add_pair_layer(index, line)
 
         self.set_starting_frame(index, f_start)
         self.set_ending_frame(index, f_end)
 
     def clear_all(self):
-        """Remove all track rows and their corresponding layers."""
+        """Remove all pair rows and their corresponding layers."""
         for index in list(self._rows.keys()):
-            self.remove_track(index)
+            self.remove_pair(index)
         self._next_index = 1
 
-    def remove_track(self, index: int) -> None:
+    def remove_pair(self, index: int) -> None:
         """Remove the row corresponding to `index`, if it exists."""
         row = self._rows.pop(index, None)
         if row is None:
@@ -128,14 +128,14 @@ class TracksManagerWidget(QWidget):
 
         self._rows_layout.removeWidget(row.container)
         row.container.deleteLater()
-        self._remove_track_layer(index)
+        self._remove_pair_layer(index)
 
-    def track_count(self) -> int:
-        """Number of currently displayed tracks."""
+    def pair_count(self) -> int:
+        """Number of currently displayed pairs."""
         return len(self._rows)
 
     def update_starting_frame(self, index: int, frame: int):
-        """Set the starting frame for a track row, updating its label."""
+        """Set the starting frame for a pair row, updating its label."""
         if not self._has_a_line(index):
             return
 
@@ -159,7 +159,7 @@ class TracksManagerWidget(QWidget):
         row.end_button.setEnabled(True)
 
     def update_ending_frame(self, index: int, frame: int):
-        """Set the ending frame for a track row, updating its label."""
+        """Set the ending frame for a pair row, updating its label."""
         if not self._has_a_line(index):
             return
 
@@ -184,15 +184,15 @@ class TracksManagerWidget(QWidget):
         row.start_button.setText(f"From: {start}")
         row.end_button.setText(f"To: {end}")
 
-    def as_track_layer_name(self, index: int) -> str:
-        """Return the name of the track layer corresponding to `index`."""
+    def as_pair_layer_name(self, index: int) -> str:
+        """Return the name of the pair layer corresponding to `index`."""
         index = int(index)
         return f"{self.PREFIX}{index:0{self.INDEX_PADDING}d}"
 
     def as_hints(self) -> dict:
-        """Convert tracks to hint format.
+        """Convert pairs to hint format.
         
-        Returns a dictionary where keys are track indices and values are dicts with:
+        Returns a dictionary where keys are pair indices and values are dicts with:
         - 'start': starting frame
         - 'end': ending frame
         - 'points': numpy array of points (spatial coordinates)
@@ -201,7 +201,7 @@ class TracksManagerWidget(QWidget):
         hints = {}
         for index, row in self._rows.items():
             # Get points from the layer if it exists
-            layer_name = self.as_track_layer_name(index)
+            layer_name = self.as_pair_layer_name(index)
             points = np.array([])
             if layer_name in self.viewer.layers:
                 layer = self.viewer.layers[layer_name]
@@ -215,11 +215,11 @@ class TracksManagerWidget(QWidget):
                     show_warning(f"Layer {layer_name} has {len(layer.data)} shapes, expected 1.")
 
             if row.frame_start is None or row.frame_end is None:
-                show_warning(f"Track {index} has undefined start or end frame.")
+                show_warning(f"Pair {index} has undefined start or end frame.")
                 continue
 
             if row.frame_end - row.frame_start <= 0:
-                show_warning(f"Track {index} has non-positive duration: start={row.frame_start}, end={row.frame_end}.")
+                show_warning(f"Pair {index} has non-positive duration: start={row.frame_start}, end={row.frame_end}.")
                 continue
             
             hints[index] = {
@@ -232,7 +232,7 @@ class TracksManagerWidget(QWidget):
         return hints
 
     def _next_color(self) -> str:
-        """Return a color for the next track row, cycling through a palette."""
+        """Return a color for the next pair row, cycling through a palette."""
         return self.PALETTE[(self._next_index - 1) % len(self.PALETTE)]
 
     @staticmethod
@@ -243,7 +243,7 @@ class TracksManagerWidget(QWidget):
         policy.setHorizontalPolicy(QSizePolicy.Fixed)
         button.setSizePolicy(policy)
 
-    def _build_row(self, index: int, color=None) -> _TrackRow:
+    def _build_row(self, index: int, color=None) -> _PairRow:
         container = QWidget(self._rows_container)
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -275,7 +275,7 @@ class TracksManagerWidget(QWidget):
         end_button.clicked.connect(lambda _checked, i=index: self._on_end_clicked(i))
         delete_button.clicked.connect(lambda _checked, i=index: self._on_delete_clicked(i))
 
-        return _TrackRow(
+        return _PairRow(
             color=color or self._next_color(),
             index=index,
             container=container,
@@ -286,10 +286,10 @@ class TracksManagerWidget(QWidget):
         )
 
     def _format_label(self, index: int) -> str:
-        return f"Centrosome {index:0{self.INDEX_PADDING}d}:"
+        return f"Pair {index:0{self.INDEX_PADDING}d}:"
 
-    def _add_track_layer(self, track_id, line=None):
-        layer_name = f"{self.PREFIX}{track_id:0{self.INDEX_PADDING}d}"
+    def _add_pair_layer(self, pair_id, line=None):
+        layer_name = f"{self.PREFIX}{pair_id:0{self.INDEX_PADDING}d}"
         if layer_name in self.viewer.layers:
             return
         a, s, u = self.parent.get_image_calibration()
@@ -308,17 +308,17 @@ class TracksManagerWidget(QWidget):
             units=u
         )
 
-    def _remove_track_layer(self, track_id):
-        layer_name = f"{self.PREFIX}{track_id:0{self.INDEX_PADDING}d}"
+    def _remove_pair_layer(self, pair_id):
+        layer_name = f"{self.PREFIX}{pair_id:0{self.INDEX_PADDING}d}"
         if layer_name in self.viewer.layers:
             self.viewer.layers.remove(self.viewer.layers[layer_name])
 
-    def _on_add_track_clicked(self) -> None:
+    def _on_add_pair_clicked(self) -> None:
         layer = self.viewer.layers.selection.active
         if layer is None:
             show_warning("An active image layer is required.")
             return
-        self.add_track()
+        self.add_pair()
 
     def _freeze_line_on_layer(self, index, start_t):
         layer_name = f"{self.PREFIX}{index:0{self.INDEX_PADDING}d}"
@@ -350,15 +350,15 @@ class TracksManagerWidget(QWidget):
     def _on_start_clicked(self, index: int) -> None:
         f = int(self.viewer.dims.point[0])
         self.update_starting_frame(index, f)
-        self.trackStartRequested.emit(index)
+        self.pairStartRequested.emit(index)
 
     def _on_end_clicked(self, index: int) -> None:
         f = int(self.viewer.dims.point[0])
         self.update_ending_frame(index, f)
-        self.trackEndRequested.emit(index)
+        self.pairEndRequested.emit(index)
 
     def _on_delete_clicked(self, index: int) -> None:
         # Callback(s) run first (via the signal), THEN the row is removed,
         # as requested.
-        self.trackDeleteRequested.emit(index)
-        self.remove_track(index)
+        self.pairDeleteRequested.emit(index)
+        self.remove_pair(index)

@@ -34,16 +34,16 @@ class FindSpotsOperator:
         Write them in a buffer having the same size as the kymo and make a sum projection of it to keep only the time axis.
         Make a new dataframe with each column corresponding to a track id.
         """
-        buffer = {centriole_id: np.zeros((0, 2), dtype=int) for centriole_id in kymographs.keys()}
+        buffer = {centrosome_id: np.zeros((0, 2), dtype=int) for centrosome_id in kymographs.keys()}
 
-        def _find_spots_kymo(centriole_id, kymo):
+        def _find_spots_kymo(centrosome_id, kymo):
             kymo = gaussian_filter(kymo, sigma=(0.1, 0.5))
             kymo -= np.min(kymo)
             kymo /= np.max(kymo)
             # kymo = (-1 * kymo + 1)
             peaks = h_maxima(kymo, h=np.std(kymo) * self.std_coeff)
             coordinates = np.argwhere(peaks)
-            buffer[centriole_id] = coordinates
+            buffer[centrosome_id] = coordinates
 
         with ThreadPoolExecutor() as executor:
             executor.map(lambda args: _find_spots_kymo(*args), kymographs.items())
@@ -66,9 +66,9 @@ if __name__ == "__main__":
     kymos_path = Path("/home/clement/Documents/projects/nucleation/draft/implementation/dump/kymos")
 
     for kymo_path in kymos_path.glob("kymo_*.tif"):
-        centriole_id = int(kymo_path.name.replace("kymo_", "").replace(".tif", ""))
+        centrosome_id = int(kymo_path.name.replace("kymo_", "").replace(".tif", ""))
         kymograph = tiff.imread(kymo_path)
-        kymographs[centriole_id] = kymograph
+        kymographs[centrosome_id] = kymograph
 
     # Running the operator
     op = FindSpotsOperator()
@@ -81,22 +81,22 @@ if __name__ == "__main__":
     viewer = napari.Viewer()
     translation = 0
 
-    for centriole_id, coords in coordinates.items():
-        kymo = kymographs[centriole_id]
+    for centrosome_id, coords in coordinates.items():
+        kymo = kymographs[centrosome_id]
         viewer.add_image(
             kymo, 
-            name=f"Kymograph {centriole_id}",
+            name=f"Kymograph {centrosome_id}",
             translate=[0, translation]
         )
         viewer.add_points(
             coords, 
-            name=f"Spots {centriole_id}", 
+            name=f"Spots {centrosome_id}", 
             size=3, 
             face_color='transparent',
             border_color='red',
             translate=[0, translation]
         )
         translation += (kymo.shape[1] + 10)
-        np.save(kymos_path / f"spots_{centriole_id}.npy", coords)
+        np.save(kymos_path / f"spots_{centrosome_id}.npy", coords)
 
     napari.run()

@@ -1,4 +1,4 @@
-from .find_centrosomes_operator import FindCentrosomesOperator
+from .find_pairs_operator import FindPairsOperator
 from .build_arcs_operator import BuildArcsOperator
 from .make_kymo_operator import MakeKymographOperator
 from .find_spots_operator import FindSpotsOperator
