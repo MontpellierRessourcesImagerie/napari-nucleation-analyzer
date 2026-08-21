@@ -3,6 +3,7 @@
 ![GitHub License](https://img.shields.io/github/license/MontpellierRessourcesImagerie/napari-nucleation-analyzer)
 ![Python Version](https://img.shields.io/badge/Python-3.10|3.11|3.12-blue?logo=python)
 ![Unit tests](https://img.shields.io/github/actions/workflow/status/MontpellierRessourcesImagerie/napari-nucleation-analyzer/test_and_deploy.yml?logo=pytest&label=tests)
+![PyPI version](https://img.shields.io/pypi/v/napari-nucleation-analyzer)
 
 This Napari plugin allows you to:
 - Detect pairs of centrioles and track them over time to form centrosomes.
